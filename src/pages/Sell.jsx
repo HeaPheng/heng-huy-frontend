@@ -77,6 +77,8 @@ export default function Sell() {
   const [paymentMethod, setPaymentMethod] = useState("cash");
   const [paidAmount, setPaidAmount] = useState("");
   const [saleDate, setSaleDate] = useState(today());
+  const [hasDelivery, setHasDelivery] = useState(false);
+  const [deliveryFee, setDeliveryFee] = useState("");
 
   const [cartItems, setCartItems] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -132,14 +134,19 @@ export default function Sell() {
 
   const stockKg = Number(selectedProduct?.stock_kg || 0);
   const price = Number(pricePerKg || 0);
+  const deliveryAmount = hasDelivery ? Number(deliveryFee || 0) : 0;
   const currentSubtotal = quantityKg * price;
   const stockAfterSale = Math.max(stockKg - quantityKg, 0);
   const isOverStock = quantityKg > stockKg;
 
   const cartTotal = cartItems.reduce((sum, item) => sum + item.subtotal, 0);
-  const totalPreview = cartTotal + currentSubtotal;
+  const totalPreview = cartTotal + currentSubtotal + deliveryAmount;
   const paidPreview =
-    paymentStatus === "paid" ? totalPreview : paymentStatus === "unpaid" ? 0 : Number(paidAmount || 0);
+    paymentStatus === "paid"
+      ? totalPreview
+      : paymentStatus === "unpaid"
+        ? 0
+        : Number(paidAmount || 0);
   const balancePreview = Math.max(totalPreview - paidPreview, 0);
 
   function goToStockPage() {
@@ -295,9 +302,18 @@ export default function Sell() {
       return;
     }
 
-    const finalTotal = finalItems.reduce((sum, item) => sum + Number(item.subtotal || 0), 0);
+    const finalItemsTotal = finalItems.reduce(
+      (sum, item) => sum + Number(item.subtotal || 0),
+      0
+    );
+    const finalDeliveryFee = hasDelivery ? Number(deliveryFee || 0) : 0;
+    const finalTotal = finalItemsTotal + finalDeliveryFee;
     const finalPaidAmount =
-      paymentStatus === "paid" ? finalTotal : paymentStatus === "unpaid" ? 0 : Number(paidAmount || 0);
+      paymentStatus === "paid"
+        ? finalTotal
+        : paymentStatus === "unpaid"
+          ? 0
+          : Number(paidAmount || 0);
 
     if (paymentStatus === "debt" && finalPaidAmount <= 0) {
       alert("សូមបញ្ចូលចំនួនប្រាក់កក់។");
@@ -320,6 +336,7 @@ export default function Sell() {
         payment_method: paymentMethod,
         payment_status: paymentStatus,
         paid_amount: finalPaidAmount,
+        delivery_fee: finalDeliveryFee,
         items: finalItems.map((item) => ({
           product_id: item.product_id,
           quantity: item.quantity,
@@ -332,6 +349,7 @@ export default function Sell() {
         ...res.data,
         payment_status: res.data.payment_status || paymentStatus,
         paid_amount: res.data.paid_amount ?? finalPaidAmount,
+        delivery_fee: res.data.delivery_fee ?? finalDeliveryFee,
       });
 
       const productsRes = await api.get("/products");
@@ -344,6 +362,8 @@ export default function Sell() {
       setPaymentMethod("cash");
       setPaidAmount("");
       setSaleDate(today());
+      setHasDelivery(false);
+      setDeliveryFee("");
       setCartItems([]);
       setSuggestions([]);
       setShowSuggestions(false);
@@ -467,6 +487,7 @@ export default function Sell() {
                     className="w-full rounded-xl border border-slate-200 dark:border-slate-700 dark:bg-slate-950 dark:text-white dark:placeholder:text-slate-500 px-4 py-3 outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100"
                   />
                 </div>
+
                 <div>
                   <label className="mb-2 block text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
                     កាលបរិច្ឆេទលក់
@@ -493,8 +514,8 @@ export default function Sell() {
                           setActiveGrade(1);
                         }}
                         className={`${optionButtonBase} ${activeType === type
-                          ? "border-green-600 bg-green-600 text-white hover:bg-green-700"
-                          : "border-slate-200 bg-white text-slate-700 hover:border-green-300 hover:bg-green-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:hover:border-green-700 dark:hover:bg-green-950/30"
+                            ? "border-green-600 bg-green-600 text-white hover:bg-green-700"
+                            : "border-slate-200 bg-white text-slate-700 hover:border-green-300 hover:bg-green-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:hover:border-green-700 dark:hover:bg-green-950/30"
                           }`}
                       >
                         {TYPE_LABELS[type]}
@@ -514,8 +535,8 @@ export default function Sell() {
                         type="button"
                         onClick={() => setActiveGrade(grade)}
                         className={`${optionButtonBase} ${activeGrade === grade
-                          ? "border-green-600 bg-green-600 text-white hover:bg-green-700"
-                          : "border-slate-200 bg-white text-slate-700 hover:border-green-300 hover:bg-green-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:hover:border-green-700 dark:hover:bg-green-950/30"
+                            ? "border-green-600 bg-green-600 text-white hover:bg-green-700"
+                            : "border-slate-200 bg-white text-slate-700 hover:border-green-300 hover:bg-green-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:hover:border-green-700 dark:hover:bg-green-950/30"
                           }`}
                       >
                         លេខ {grade}
@@ -523,7 +544,39 @@ export default function Sell() {
                     ))}
                   </div>
                 </div>
-
+                <div>
+                  <label className="mb-2 block text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
+                    បរិមាណ
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={quantity}
+                      onChange={(e) => setQuantity(e.target.value)}
+                      placeholder="0"
+                      className="sell-no-spinner w-full rounded-xl border border-slate-200 dark:border-slate-700 dark:bg-slate-950 dark:text-white dark:placeholder:text-slate-500 px-4 py-3 pr-24 outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100"
+                    />
+                    <select
+                      value=""
+                      onChange={(e) => {
+                        if (e.target.value) setQuantity(e.target.value);
+                      }}
+                      className="absolute right-2 top-1/2 h-9 -translate-y-1/2 cursor-pointer appearance-none rounded-lg border border-slate-200 bg-slate-50 px-3 pr-7 text-xs font-bold text-slate-700 outline-none transition hover:border-green-400 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:border-green-700"
+                    >
+                      <option value="">ជ្រើស</option>
+                      {QUANTITY_OPTIONS.map((item) => (
+                        <option key={item} value={item}>
+                          {item}
+                        </option>
+                      ))}
+                    </select>
+                    <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-[10px] text-slate-500 dark:text-slate-400">
+                      ▼
+                    </span>
+                  </div>
+                </div>
                 <div>
                   <label className="mb-2 block text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
                     តម្លៃក្នុង ១ គីឡូ
@@ -558,39 +611,6 @@ export default function Sell() {
                   </div>
                 </div>
 
-                <div>
-                  <label className="mb-2 block text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
-                    បរិមាណ
-                  </label>
-                  <div className="relative">
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={quantity}
-                      onChange={(e) => setQuantity(e.target.value)}
-                      placeholder="0"
-                      className="sell-no-spinner w-full rounded-xl border border-slate-200 dark:border-slate-700 dark:bg-slate-950 dark:text-white dark:placeholder:text-slate-500 px-4 py-3 pr-24 outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100"
-                    />
-                    <select
-                      value=""
-                      onChange={(e) => {
-                        if (e.target.value) setQuantity(e.target.value);
-                      }}
-                      className="absolute right-2 top-1/2 h-9 -translate-y-1/2 cursor-pointer appearance-none rounded-lg border border-slate-200 bg-slate-50 px-3 pr-7 text-xs font-bold text-slate-700 outline-none transition hover:border-green-400 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:border-green-700"
-                    >
-                      <option value="">ជ្រើស</option>
-                      {QUANTITY_OPTIONS.map((item) => (
-                        <option key={item} value={item}>
-                          {item}
-                        </option>
-                      ))}
-                    </select>
-                    <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-[10px] text-slate-500 dark:text-slate-400">
-                      ▼
-                    </span>
-                  </div>
-                </div>
 
                 <div>
                   <label className="mb-2 block text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
@@ -635,6 +655,47 @@ export default function Sell() {
 
                 <div className="md:col-span-2">
                   <label className="mb-2 block text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
+                    ថ្លៃដឹកជញ្ជូន
+                  </label>
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setHasDelivery(false);
+                        setDeliveryFee("");
+                      }}
+                      className={`${fullOptionButtonBase} ${!hasDelivery
+                          ? "border-green-600 bg-green-600 text-white hover:bg-green-700"
+                          : "border-slate-200 bg-white text-slate-700 hover:border-green-300 hover:bg-green-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:hover:border-green-700 dark:hover:bg-green-950/30"
+                        }`}
+                    >
+                      មិនមានថ្លៃដឹក
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setHasDelivery(true)}
+                      className={`${fullOptionButtonBase} ${hasDelivery
+                          ? "border-green-600 bg-green-600 text-white hover:bg-green-700"
+                          : "border-slate-200 bg-white text-slate-700 hover:border-green-300 hover:bg-green-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:hover:border-green-700 dark:hover:bg-green-950/30"
+                        }`}
+                    >
+                      មានថ្លៃដឹក
+                    </button>
+                  </div>
+
+                  {hasDelivery && (
+                    <input
+                      inputMode="numeric"
+                      value={formatMoneyInput(deliveryFee)}
+                      onChange={(e) => setDeliveryFee(parseMoneyInput(e.target.value))}
+                      placeholder="បញ្ចូលថ្លៃដឹក"
+                      className="mt-3 w-full rounded-xl border border-slate-200 dark:border-slate-700 dark:bg-slate-950 dark:text-white dark:placeholder:text-slate-500 px-4 py-3 outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100"
+                    />
+                  )}
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="mb-2 block text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
                     ស្ថានភាពទូទាត់
                   </label>
                   <div className="grid gap-3 md:grid-cols-3">
@@ -642,8 +703,8 @@ export default function Sell() {
                       type="button"
                       onClick={() => selectPaymentStatus("paid")}
                       className={`${fullOptionButtonBase} ${paymentStatus === "paid"
-                        ? "border-green-600 bg-green-600 text-white hover:bg-green-700"
-                        : "border-slate-200 bg-white text-slate-700 hover:border-green-300 hover:bg-green-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:hover:border-green-700 dark:hover:bg-green-950/30"
+                          ? "border-green-600 bg-green-600 text-white hover:bg-green-700"
+                          : "border-slate-200 bg-white text-slate-700 hover:border-green-300 hover:bg-green-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:hover:border-green-700 dark:hover:bg-green-950/30"
                         }`}
                     >
                       បានទូទាត់
@@ -652,8 +713,8 @@ export default function Sell() {
                       type="button"
                       onClick={() => selectPaymentStatus("debt")}
                       className={`${fullOptionButtonBase} ${paymentStatus === "debt"
-                        ? "border-yellow-600 bg-yellow-500 text-white hover:bg-yellow-600"
-                        : "border-slate-200 bg-white text-slate-700 hover:border-yellow-300 hover:bg-yellow-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:hover:border-yellow-700 dark:hover:bg-yellow-950/30"
+                          ? "border-yellow-600 bg-yellow-500 text-white hover:bg-yellow-600"
+                          : "border-slate-200 bg-white text-slate-700 hover:border-yellow-300 hover:bg-yellow-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:hover:border-yellow-700 dark:hover:bg-yellow-950/30"
                         }`}
                     >
                       កក់ប្រាក់
@@ -662,8 +723,8 @@ export default function Sell() {
                       type="button"
                       onClick={() => selectPaymentStatus("unpaid")}
                       className={`${fullOptionButtonBase} ${paymentStatus === "unpaid"
-                        ? "border-red-600 bg-red-600 text-white hover:bg-red-700"
-                        : "border-slate-200 bg-white text-slate-700 hover:border-red-300 hover:bg-red-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:hover:border-red-700 dark:hover:bg-red-950/30"
+                          ? "border-red-600 bg-red-600 text-white hover:bg-red-700"
+                          : "border-slate-200 bg-white text-slate-700 hover:border-red-300 hover:bg-red-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:hover:border-red-700 dark:hover:bg-red-950/30"
                         }`}
                     >
                       មិនទាន់ទូទាត់
@@ -695,8 +756,8 @@ export default function Sell() {
                       type="button"
                       onClick={() => setPaymentMethod("cash")}
                       className={`${fullOptionButtonBase} ${paymentMethod === "cash"
-                        ? "border-green-600 bg-green-600 text-white hover:bg-green-700"
-                        : "border-slate-200 bg-white text-slate-700 hover:border-green-300 hover:bg-green-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:hover:border-green-700 dark:hover:bg-green-950/30"
+                          ? "border-green-600 bg-green-600 text-white hover:bg-green-700"
+                          : "border-slate-200 bg-white text-slate-700 hover:border-green-300 hover:bg-green-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:hover:border-green-700 dark:hover:bg-green-950/30"
                         }`}
                     >
                       សាច់ប្រាក់
@@ -705,8 +766,8 @@ export default function Sell() {
                       type="button"
                       onClick={() => setPaymentMethod("qr")}
                       className={`${fullOptionButtonBase} ${paymentMethod === "qr"
-                        ? "border-green-600 bg-green-600 text-white hover:bg-green-700"
-                        : "border-slate-200 bg-white text-slate-700 hover:border-green-300 hover:bg-green-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:hover:border-green-700 dark:hover:bg-green-950/30"
+                          ? "border-green-600 bg-green-600 text-white hover:bg-green-700"
+                          : "border-slate-200 bg-white text-slate-700 hover:border-green-300 hover:bg-green-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:hover:border-green-700 dark:hover:bg-green-950/30"
                         }`}
                     >
                       QR
@@ -715,10 +776,10 @@ export default function Sell() {
                 </div>
               </div>
 
-              <div className="mt-6 flex flex-col gap-4 md:flex-row md:items-center">
+              <div className="mt-6 flex flex-col items-center justify-center gap-4">
                 <button
                   disabled={loading}
-                  className="rounded-xl bg-green-600 px-6 py-4 font-bold text-white transition-all duration-200 hover:-translate-y-0.5 hover:bg-green-700 hover:shadow-md active:scale-[0.99] disabled:bg-slate-300 dark:disabled:bg-slate-700"
+                  className="w-full max-w-md rounded-xl bg-green-600 px-10 py-4 font-bold text-white transition-all duration-200 hover:-translate-y-0.5 hover:bg-green-700 hover:shadow-md active:scale-[0.99] disabled:bg-slate-300 dark:disabled:bg-slate-700"
                 >
                   {loading ? "កំពុងបង្កើត..." : "បង្កើតវិក្កយបត្រ"}
                 </button>
@@ -726,8 +787,8 @@ export default function Sell() {
                 <p
                   className={
                     isOverStock
-                      ? "font-semibold text-red-600"
-                      : "text-slate-600 dark:text-slate-300"
+                      ? "text-center font-semibold text-red-600"
+                      : "text-center text-slate-600 dark:text-slate-300"
                   }
                 >
                   ស្តុកនៅសល់ក្រោយលក់:{" "}
@@ -796,11 +857,23 @@ export default function Sell() {
                     </div>
                   )}
 
-                  {cartItems.length === 0 && !quantity && !pricePerKg && (
-                    <p className="text-slate-400 dark:text-slate-500">
-                      មិនទាន់មានទំនិញ
-                    </p>
+                  {hasDelivery && deliveryAmount > 0 && (
+                    <div className="mb-3 rounded-xl border border-blue-100 dark:border-blue-800/60 bg-blue-50 dark:bg-blue-950/30 p-3">
+                      <p className="font-bold dark:text-white">ថ្លៃដឹកជញ្ជូន</p>
+                      <div className="mt-2 text-right font-bold dark:text-white">
+                        {formatRiel(deliveryAmount)}
+                      </div>
+                    </div>
                   )}
+
+                  {cartItems.length === 0 &&
+                    !quantity &&
+                    !pricePerKg &&
+                    deliveryAmount <= 0 && (
+                      <p className="text-slate-400 dark:text-slate-500">
+                        មិនទាន់មានទំនិញ
+                      </p>
+                    )}
                 </div>
 
                 <div className="border-t border-slate-200 dark:border-slate-700 pt-5 space-y-3">
@@ -917,13 +990,12 @@ function Row({ label, value, strong, danger }) {
     <div className="flex justify-between gap-4">
       <span className="text-slate-500 dark:text-slate-400">{label}</span>
       <span
-        className={`text-right font-bold ${
-          danger
+        className={`text-right font-bold ${danger
             ? "text-red-600 dark:text-red-400"
             : strong
-            ? "text-green-600 dark:text-green-400"
-            : "dark:text-white"
-        }`}
+              ? "text-green-600 dark:text-green-400"
+              : "dark:text-white"
+          }`}
       >
         {value}
       </span>

@@ -3,6 +3,7 @@ import html2canvas from "html2canvas";
 import api from "../api";
 import PrintInvoice from "../components/PrintInvoice";
 
+
 const INITIAL_FILTERS = {
   search: "",
   selectedProductId: "all",
@@ -70,10 +71,10 @@ function getProductKhmerName(product) {
 function getPaymentAmount(payment) {
   return Number(
     payment?.amount ??
-      payment?.paid_amount ??
-      payment?.payment_amount ??
-      payment?.deposit_amount ??
-      0
+    payment?.paid_amount ??
+    payment?.payment_amount ??
+    payment?.deposit_amount ??
+    0
   );
 }
 
@@ -210,6 +211,10 @@ function SummaryCards({ sale, styles }) {
 }
 
 export default function Sales() {
+
+  const [deleteSale, setDeleteSale] = useState(null);
+  const [deleting, setDeleting] = useState(false);
+
   const tableRef = useRef(null);
   const imageInvoiceRef = useRef(null);
 
@@ -281,7 +286,24 @@ export default function Sales() {
     const res = await api.get("/products");
     setProducts(Array.isArray(res.data) ? res.data : res.data.data || []);
   }
+  async function confirmDeleteSale() {
+    if (!deleteSale) return;
 
+    setDeleting(true);
+
+    try {
+      await api.delete(`/sales/${deleteSale.id}`);
+
+      setSales((prev) => prev.filter((s) => s.id !== deleteSale.id));
+
+      setDeleteSale(null);
+    } catch (err) {
+      console.error(err);
+      alert("លុបវិក្កយបត្រមិនបានទេ");
+    } finally {
+      setDeleting(false);
+    }
+  }
   function updateFilter(key, value) {
     setFilters((prev) => ({ ...prev, [key]: value }));
   }
@@ -876,6 +898,13 @@ export default function Sales() {
                               >
                                 កែ
                               </button>
+                              <button
+                                type="button"
+                                onClick={() => setDeleteSale(sale)}
+                                style={styles.deleteBtn}
+                              >
+                                លុប
+                              </button>
 
                               <button
                                 type="button"
@@ -1331,6 +1360,52 @@ export default function Sales() {
           captureMode={true}
         />
       )}
+      {deleteSale && (
+        <div
+          className="print:hidden"
+          style={styles.modalOverlay}
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) {
+              setDeleteSale(null);
+            }
+          }}
+        >
+          <div style={styles.modalSmall}>
+            <h2 style={styles.modalTitle}>លុបវិក្កយបត្រ</h2>
+
+            <p style={styles.modalSub}>
+              តើអ្នកពិតជាចង់លុប{" "}
+              <strong>{deleteSale.invoice_no}</strong> មែនទេ?
+            </p>
+
+            <p style={{ ...styles.logicNote, marginTop: 10 }}>
+              ⚠️ Stock នឹងត្រឡប់វិញ និងប្រាក់ចំណូលនឹងត្រូវដកចេញ
+            </p>
+
+            <div style={styles.modalActions}>
+              <button
+                type="button"
+                onClick={() => setDeleteSale(null)}
+                style={styles.cancelBtn}
+              >
+                បោះបង់
+              </button>
+
+              <button
+                type="button"
+                onClick={confirmDeleteSale}
+                disabled={deleting}
+                style={{
+                  ...styles.saveBtn,
+                  background: "#dc2626",
+                }}
+              >
+                {deleting ? "កំពុងលុប..." : "លុប"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }
@@ -1454,6 +1529,14 @@ function SaleMobileCard({
 
         <button type="button" onClick={() => openEdit(sale)} style={styles.editBtn}>
           កែ
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setDeleteSale(sale)}
+          style={styles.deleteBtn}
+        >
+          លុប
         </button>
 
         <button
@@ -2195,6 +2278,16 @@ function getStyles(isDark, isMobile) {
       color: isDark ? "#94a3b8" : "#64748b",
       fontWeight: 900,
       marginTop: 20,
+    },
+    deleteBtn: {
+      background: "#dc2626",
+      color: "white",
+      border: "none",
+      borderRadius: 10,
+      padding: "9px 14px",
+      fontWeight: 900,
+      cursor: "pointer",
+      whiteSpace: "nowrap",
     },
   };
 }

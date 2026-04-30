@@ -50,6 +50,15 @@ function kgToFormQuantity(entry) {
   };
 }
 
+function stockEntryTypeLabel(type) {
+  return type === "clear" ? "ដកស្តុក" : "បន្ថែមស្តុក";
+}
+
+function signedKg(entry) {
+  const sign = entry.type === "clear" ? "-" : "+";
+  return `${sign}${formatKg(entry.quantity_kg)}`;
+}
+
 export default function Stock() {
   const [products, setProducts] = useState([]);
   const [activeType, setActiveType] = useState("A");
@@ -58,6 +67,7 @@ export default function Stock() {
   const [loading, setLoading] = useState(false);
   const [editId, setEditId] = useState(null);
   const [deleteId, setDeleteId] = useState(null);
+  const [visibleCount, setVisibleCount] = useState(5);
 
   const [filters, setFilters] = useState({
     supplier: "all",
@@ -67,6 +77,7 @@ export default function Stock() {
 
   const emptyForm = {
     date: today(),
+    type: "add",
     quantity: "",
     unit: "kg",
     supplier: "",
@@ -113,6 +124,7 @@ export default function Stock() {
 
   useEffect(() => {
     setEditId(null);
+    setVisibleCount(5);
 
     const params = new URLSearchParams(window.location.search);
     const quantity = params.get("quantity");
@@ -154,6 +166,7 @@ export default function Stock() {
 
   function updateFilter(field, value) {
     setFilters((prev) => ({ ...prev, [field]: value }));
+    setVisibleCount(5);
   }
 
   function resetForm() {
@@ -175,6 +188,7 @@ export default function Stock() {
     setEditId(entry.id);
     setForm({
       date: entry.date || today(),
+      type: entry.type || "add",
       quantity: qty.quantity,
       unit: qty.unit,
       supplier: entry.supplier || "",
@@ -196,11 +210,17 @@ export default function Stock() {
       return;
     }
 
+    if (form.type === "clear" && !form.note.trim()) {
+      alert("សូមបញ្ចូលមូលហេតុសម្រាប់ដកស្តុក។");
+      return;
+    }
+
     setLoading(true);
 
     const payload = {
       product_id: activeProduct.id,
       date: form.date,
+      type: form.type,
       quantity: Number(form.quantity),
       unit: form.unit,
       buying_price_per_kg: Number(form.buying_price_per_kg || 0),
@@ -218,8 +238,11 @@ export default function Stock() {
       resetForm();
       await fetchProducts();
       await fetchEntries(activeProduct.id);
-    } catch {
-      alert(editId ? "កែប្រែស្តុកមិនបានទេ។" : "បន្ថែមស្តុកមិនបានទេ។");
+    } catch (error) {
+      alert(
+        error.response?.data?.message ||
+          (editId ? "កែប្រែស្តុកមិនបានទេ។" : "បន្ថែមស្តុកមិនបានទេ។")
+      );
     } finally {
       setLoading(false);
     }
@@ -275,12 +298,23 @@ export default function Stock() {
     });
   }, [entries, filters]);
 
-  const totalFilteredKg = useMemo(() => {
-    return filteredEntries.reduce(
-      (sum, entry) => sum + Number(entry.quantity_kg || 0),
-      0
-    );
+  const visibleEntries = useMemo(() => {
+    return filteredEntries.slice(0, visibleCount);
+  }, [filteredEntries, visibleCount]);
+
+  const totalAddKg = useMemo(() => {
+    return filteredEntries.reduce((sum, entry) => {
+      return entry.type === "clear" ? sum : sum + Number(entry.quantity_kg || 0);
+    }, 0);
   }, [filteredEntries]);
+
+  const totalClearKg = useMemo(() => {
+    return filteredEntries.reduce((sum, entry) => {
+      return entry.type === "clear" ? sum + Number(entry.quantity_kg || 0) : sum;
+    }, 0);
+  }, [filteredEntries]);
+
+  const totalFilteredKg = totalAddKg - totalClearKg;
 
   return (
     <main className="stock-page">
@@ -333,7 +367,8 @@ export default function Stock() {
         }
 
         .stock-tabs,
-        .grade-tabs {
+        .grade-tabs,
+        .stock-type-tabs {
           display: flex;
           gap: 12px;
           margin-top: 18px;
@@ -344,8 +379,14 @@ export default function Stock() {
           margin-top: 12px;
         }
 
+        .stock-type-tabs {
+          margin-top: 0;
+          margin-bottom: 22px;
+        }
+
         .stock-tab,
-        .grade-tab {
+        .grade-tab,
+        .stock-type-tab {
           border: 1px solid #d6ead8;
           background: white;
           color: #0f172a;
@@ -357,7 +398,8 @@ export default function Stock() {
         }
 
         html.dark .stock-tab,
-        html.dark .grade-tab {
+        html.dark .grade-tab,
+        html.dark .stock-type-tab {
           border-color: #334155;
           background: #0f172a;
           color: #e2e8f0;
@@ -368,25 +410,35 @@ export default function Stock() {
         }
 
         .stock-tab:hover,
-        .grade-tab:hover {
+        .grade-tab:hover,
+        .stock-type-tab:hover {
           border-color: #16a34a;
           background: #ecfdf5;
           color: #15803d;
         }
 
         html.dark .stock-tab:hover,
-        html.dark .grade-tab:hover {
+        html.dark .grade-tab:hover,
+        html.dark .stock-type-tab:hover {
           border-color: #22c55e;
           background: #052e16;
           color: #86efac;
         }
 
         .stock-tab.active,
-        .grade-tab.active {
+        .grade-tab.active,
+        .stock-type-tab.active-add {
           background: #16a34a !important;
           color: white !important;
           border-color: #16a34a !important;
           box-shadow: 0 10px 24px rgba(22, 163, 74, 0.25);
+        }
+
+        .stock-type-tab.active-clear {
+          background: #dc2626 !important;
+          color: white !important;
+          border-color: #dc2626 !important;
+          box-shadow: 0 10px 24px rgba(220, 38, 38, 0.22);
         }
 
         .stock-current {
@@ -570,6 +622,10 @@ export default function Stock() {
           cursor: pointer;
         }
 
+        .stock-btn.clear-mode {
+          background: #dc2626;
+        }
+
         .cancel-btn {
           background: #e2e8f0;
           color: #0f172a;
@@ -627,6 +683,22 @@ export default function Stock() {
           color: #4ade80;
         }
 
+        .summary-box strong.loss {
+          color: #dc2626;
+        }
+
+        html.dark .summary-box strong.loss {
+          color: #f87171;
+        }
+
+        .summary-box strong.net-negative {
+          color: #dc2626;
+        }
+
+        html.dark .summary-box strong.net-negative {
+          color: #f87171;
+        }
+
         .stock-table {
           width: 100%;
           border-collapse: collapse;
@@ -659,6 +731,53 @@ export default function Stock() {
 
         .stock-table td.qty {
           font-weight: 800;
+        }
+
+        .stock-type-badge {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          border-radius: 999px;
+          padding: 6px 12px;
+          font-size: 13px;
+          font-weight: 900;
+          white-space: nowrap;
+        }
+
+        .stock-type-badge.add {
+          background: #dcfce7;
+          color: #15803d;
+        }
+
+        .stock-type-badge.clear {
+          background: #fee2e2;
+          color: #b91c1c;
+        }
+
+        html.dark .stock-type-badge.add {
+          background: #052e16;
+          color: #4ade80;
+        }
+
+        html.dark .stock-type-badge.clear {
+          background: #450a0a;
+          color: #fca5a5;
+        }
+
+        .qty-add {
+          color: #15803d !important;
+        }
+
+        .qty-clear {
+          color: #dc2626 !important;
+        }
+
+        html.dark .qty-add {
+          color: #4ade80 !important;
+        }
+
+        html.dark .qty-clear {
+          color: #f87171 !important;
         }
 
         .muted {
@@ -702,6 +821,146 @@ export default function Stock() {
         html.dark .delete-btn {
           background: #450a0a;
           color: #fca5a5;
+        }
+
+        .stock-mobile-list {
+          display: none;
+        }
+
+        .stock-history-card {
+          border: 1px solid #d6ead8;
+          background: #ffffff;
+          border-radius: 18px;
+          padding: 18px;
+          box-shadow: 0 8px 20px rgba(15, 23, 42, 0.05);
+        }
+
+        html.dark .stock-history-card {
+          border-color: #1e293b;
+          background: #0b1220;
+          box-shadow: 0 8px 20px rgba(0, 0, 0, 0.25);
+        }
+
+        .stock-history-top {
+          display: flex;
+          align-items: flex-start;
+          justify-content: space-between;
+          gap: 14px;
+          margin-bottom: 12px;
+        }
+
+        .stock-history-title {
+          font-size: 18px;
+          font-weight: 900;
+          color: #0f172a;
+        }
+
+        html.dark .stock-history-title {
+          color: #ffffff;
+        }
+
+        .stock-history-date {
+          margin-top: 4px;
+          font-size: 13px;
+          font-weight: 700;
+          color: #94a3b8;
+        }
+
+        .stock-history-qty {
+          border-radius: 999px;
+          padding: 8px 12px;
+          font-size: 15px;
+          font-weight: 900;
+          white-space: nowrap;
+        }
+
+        .stock-history-qty.add {
+          background: #dcfce7;
+          color: #15803d;
+        }
+
+        .stock-history-qty.clear {
+          background: #fee2e2;
+          color: #b91c1c;
+        }
+
+        html.dark .stock-history-qty.add {
+          background: #052e16;
+          color: #4ade80;
+        }
+
+        html.dark .stock-history-qty.clear {
+          background: #450a0a;
+          color: #fca5a5;
+        }
+
+        .stock-history-info {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          border: 1px solid #d6ead8;
+          border-radius: 14px;
+          overflow: hidden;
+          margin-top: 14px;
+        }
+
+        html.dark .stock-history-info {
+          border-color: #334155;
+        }
+
+        .stock-history-info div {
+          padding: 12px;
+          border-right: 1px solid #d6ead8;
+        }
+
+        .stock-history-info div:last-child {
+          border-right: none;
+        }
+
+        html.dark .stock-history-info div {
+          border-right-color: #334155;
+        }
+
+        .stock-history-info span {
+          display: block;
+          font-size: 12px;
+          font-weight: 700;
+          color: #64748b;
+          margin-bottom: 5px;
+        }
+
+        html.dark .stock-history-info span {
+          color: #94a3b8;
+        }
+
+        .stock-history-info strong {
+          font-size: 14px;
+          color: #0f172a;
+        }
+
+        html.dark .stock-history-info strong {
+          color: #e2e8f0;
+        }
+
+        .stock-history-note {
+          margin-top: 12px;
+          border-radius: 14px;
+          background: #f8fafc;
+          padding: 12px;
+          font-size: 14px;
+          line-height: 1.6;
+          color: #475569;
+        }
+
+        html.dark .stock-history-note {
+          background: #020617;
+          color: #cbd5e1;
+        }
+
+        .stock-history-actions {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 10px;
+          margin-top: 14px;
         }
 
         .popup-overlay {
@@ -780,11 +1039,21 @@ export default function Stock() {
           }
 
           .stock-table-wrap {
-            overflow-x: auto;
+            display: none;
           }
 
-          .stock-table {
-            min-width: 900px;
+          .stock-mobile-list {
+            display: grid;
+            gap: 14px;
+          }
+
+          .stock-actions {
+            flex-direction: column;
+          }
+
+          .stock-btn,
+          .cancel-btn {
+            width: 100%;
           }
         }
       `}</style>
@@ -793,7 +1062,7 @@ export default function Stock() {
         <div className="stock-header">
           <div className="stock-title">
             <h1>គ្រប់គ្រងស្តុក</h1>
-            <p>បន្ថែម កែប្រែ លុបស្តុកដំឡូង និងមើលប្រវត្តិនាំចូលតាមប្រភេទ។</p>
+            <p>បន្ថែម ដក កែប្រែ លុបស្តុកដំឡូង និងមើលប្រវត្តិតាមប្រភេទ។</p>
 
             <div className="stock-tabs">
               {TYPES.map((type) => (
@@ -834,8 +1103,26 @@ export default function Stock() {
 
         <form onSubmit={handleSubmit} className="stock-card">
           <div className="stock-form-head">
-            <h2>{editId ? "កែប្រែស្តុក" : "បន្ថែមស្តុកថ្មី"}</h2>
+            <h2>{editId ? "កែប្រែស្តុក" : form.type === "clear" ? "ដកស្តុក" : "បន្ថែមស្តុកថ្មី"}</h2>
             {editId && <span className="edit-badge">កំពុងកែប្រែប្រវត្តិស្តុក</span>}
+          </div>
+
+          <div className="stock-type-tabs">
+            <button
+              type="button"
+              onClick={() => updateForm("type", "add")}
+              className={`stock-type-tab ${form.type === "add" ? "active-add" : ""}`}
+            >
+              បន្ថែមស្តុក
+            </button>
+
+            <button
+              type="button"
+              onClick={() => updateForm("type", "clear")}
+              className={`stock-type-tab ${form.type === "clear" ? "active-clear" : ""}`}
+            >
+              ដក / សម្អាតស្តុក
+            </button>
           </div>
 
           <div className="stock-form-grid">
@@ -884,24 +1171,33 @@ export default function Stock() {
               />
             </Field>
 
-            <Field label="ចំណាំ" className="note-field">
+            <Field label={form.type === "clear" ? "មូលហេតុដកស្តុក" : "ចំណាំ"} className="note-field">
               <input
                 value={form.note}
+                required={form.type === "clear"}
                 onChange={(e) => updateForm("note", e.target.value)}
-                placeholder="មិនចាំបាច់បញ្ចូល"
+                placeholder={form.type === "clear" ? "ឧ. ខូចគុណភាព / បាត់បង់ / ស្ងួតខូច" : "មិនចាំបាច់បញ្ចូល"}
               />
             </Field>
           </div>
 
           <div className="stock-actions">
-            <button disabled={loading} type="submit" className="stock-btn">
+            <button
+              disabled={loading}
+              type="submit"
+              className={`stock-btn ${form.type === "clear" ? "clear-mode" : ""}`}
+            >
               {loading
                 ? editId
                   ? "កំពុងកែប្រែ..."
-                  : "កំពុងបន្ថែម..."
+                  : form.type === "clear"
+                    ? "កំពុងដក..."
+                    : "កំពុងបន្ថែម..."
                 : editId
                   ? "រក្សាទុកការកែប្រែ"
-                  : "បន្ថែមស្តុក"}
+                  : form.type === "clear"
+                    ? "ដកស្តុក"
+                    : "បន្ថែមស្តុក"}
             </button>
 
             {editId && (
@@ -957,18 +1253,20 @@ export default function Stock() {
             </div>
 
             <div className="summary-box">
-              <span>បរិមាណសរុប</span>
-              <strong>{formatKg(totalFilteredKg)}</strong>
+              <span>បន្ថែមសរុប</span>
+              <strong>{formatKg(totalAddKg)}</strong>
             </div>
 
             <div className="summary-box">
-              <span>ប្រភេទស្តុក</span>
-              <strong>{productKhmer(activeProduct)}</strong>
+              <span>ដកសរុប</span>
+              <strong className="loss">{formatKg(totalClearKg)}</strong>
             </div>
 
             <div className="summary-box">
-              <span>អ្នកផ្គត់ផ្គង់</span>
-              <strong>{filters.supplier === "all" ? "ទាំងអស់" : filters.supplier}</strong>
+              <span>សរុបសុទ្ធ</span>
+              <strong className={totalFilteredKg < 0 ? "net-negative" : ""}>
+                {formatKg(totalFilteredKg)}
+              </strong>
             </div>
           </div>
 
@@ -977,6 +1275,7 @@ export default function Stock() {
               <thead>
                 <tr>
                   <th>កាលបរិច្ឆេទ</th>
+                  <th>ប្រភេទ</th>
                   <th>អ្នកផ្គត់ផ្គង់</th>
                   <th>បរិមាណ</th>
                   <th>តម្លៃទិញ</th>
@@ -986,11 +1285,18 @@ export default function Stock() {
               </thead>
 
               <tbody>
-                {filteredEntries.map((entry) => (
+                {visibleEntries.map((entry) => (
                   <tr key={entry.id}>
                     <td>{formatDate(entry.date)}</td>
+                    <td>
+                      <span className={`stock-type-badge ${entry.type === "clear" ? "clear" : "add"}`}>
+                        {stockEntryTypeLabel(entry.type)}
+                      </span>
+                    </td>
                     <td>{entry.supplier || "—"}</td>
-                    <td className="qty">{formatKg(entry.quantity_kg)}</td>
+                    <td className={`qty ${entry.type === "clear" ? "qty-clear" : "qty-add"}`}>
+                      {signedKg(entry)}
+                    </td>
                     <td>{formatRielPerKg(entry.buying_price_per_kg)}</td>
                     <td className="muted">{entry.note || "—"}</td>
                     <td>
@@ -1008,7 +1314,7 @@ export default function Stock() {
 
                 {filteredEntries.length === 0 && (
                   <tr>
-                    <td colSpan="6" style={{ textAlign: "center", padding: 30 }}>
+                    <td colSpan="7" style={{ textAlign: "center", padding: 30 }}>
                       មិនមានប្រវត្តិស្តុកត្រូវនឹង Filter នេះទេ។
                     </td>
                   </tr>
@@ -1016,6 +1322,67 @@ export default function Stock() {
               </tbody>
             </table>
           </div>
+
+          <div className="stock-mobile-list">
+            {visibleEntries.map((entry) => (
+              <div key={entry.id} className="stock-history-card">
+                <div className="stock-history-top">
+                  <div>
+                    <div className="stock-history-title">{stockEntryTypeLabel(entry.type)}</div>
+                    <div className="stock-history-date">{formatDate(entry.date)}</div>
+                  </div>
+
+                  <div className={`stock-history-qty ${entry.type === "clear" ? "clear" : "add"}`}>
+                    {signedKg(entry)}
+                  </div>
+                </div>
+
+                <div className="stock-history-info">
+                  <div>
+                    <span>អ្នកផ្គត់ផ្គង់</span>
+                    <strong>{entry.supplier || "—"}</strong>
+                  </div>
+
+                  <div>
+                    <span>តម្លៃទិញ</span>
+                    <strong>{formatRielPerKg(entry.buying_price_per_kg)}</strong>
+                  </div>
+                </div>
+
+                <div className="stock-history-note">
+                  {entry.note || "គ្មានចំណាំ"}
+                </div>
+
+                <div className="stock-history-actions">
+                  <button type="button" onClick={() => startEdit(entry)} className="row-btn edit-btn">
+                    កែប្រែ
+                  </button>
+
+                  <button type="button" onClick={() => handleDelete(entry.id)} className="row-btn delete-btn">
+                    លុប
+                  </button>
+                </div>
+              </div>
+            ))}
+
+            {filteredEntries.length === 0 && (
+              <div className="stock-history-card">
+                មិនមានប្រវត្តិស្តុកត្រូវនឹង Filter នេះទេ។
+              </div>
+            )}
+          </div>
+
+          {visibleCount < filteredEntries.length && (
+            <div style={{ marginTop: 18, textAlign: "center" }}>
+              <button
+                type="button"
+                onClick={() => setVisibleCount((prev) => prev + 5)}
+                className="cancel-btn"
+              >
+                មើលបន្ថែម
+              </button>
+            </div>
+          )}
         </div>
       </section>
 

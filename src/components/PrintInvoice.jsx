@@ -38,6 +38,7 @@ function productKhmer(product) {
 }
 
 function itemProductKhmer(item) {
+  if (item?.is_delivery_fee) return "ថ្លៃដឹកជញ្ជូន";
   if (item?.name) return item.name;
   return productKhmer(item?.product || item);
 }
@@ -158,8 +159,21 @@ const PrintInvoice = forwardRef(function PrintInvoice({ invoice, captureMode = f
   const headerEnFont = isImageCapture ? "11px" : "10px";
   const textLift = isImageCapture ? "-10px" : "0px";
 
+  const invoiceItems = [
+    ...(invoice?.items || []),
+    ...(Number(invoice?.delivery_fee || 0) > 0
+      ? [
+          {
+            id: "delivery-fee",
+            is_delivery_fee: true,
+            subtotal: Number(invoice.delivery_fee || 0),
+          },
+        ]
+      : []),
+  ];
+
   const rows = Array.from({ length: 10 }).map((_, index) => {
-    return invoice?.items?.[index] || { id: `empty-${index}`, empty: true };
+    return invoiceItems?.[index] || { id: `empty-${index}`, empty: true };
   });
 
   const borderStyle = {
@@ -540,13 +554,13 @@ const PrintInvoice = forwardRef(function PrintInvoice({ invoice, captureMode = f
 
                 <td style={{ ...bodyCellBase, padding: "0 6px" }}>
                   <div style={tableTextCenter}>
-                    {item.empty ? "" : formatKg(item.quantity_kg)}
+                    {item.empty || item.is_delivery_fee ? "" : formatKg(item.quantity_kg)}
                   </div>
                 </td>
 
                 <td style={{ ...bodyCellBase }}>
                   <div style={tableTextRight}>
-                    {item.empty ? "" : formatRiel(item.price_per_kg)}
+                    {item.empty || item.is_delivery_fee ? "" : formatRiel(item.price_per_kg)}
                   </div>
                 </td>
 
