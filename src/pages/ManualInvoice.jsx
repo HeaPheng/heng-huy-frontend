@@ -113,6 +113,12 @@ function sortNewestFirst(list) {
 }
 
 export default function ManualInvoice() {
+
+  // Change 1: delete modal states
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteInvoice, setDeleteInvoice] = useState(null);
+  const [deleting, setDeleting] = useState(false);
+
   const printRef = useRef(null);
 
   const [activeTab, setActiveTab] = useState("create");
@@ -130,6 +136,8 @@ export default function ManualInvoice() {
     from_date: "",
     to_date: "",
   });
+
+  const [visibleCount, setVisibleCount] = useState(10);
 
   const [editOpen, setEditOpen] = useState(false);
   const [editInvoice, setEditInvoice] = useState(null);
@@ -179,6 +187,7 @@ export default function ManualInvoice() {
     if (activeTab !== "list") return;
 
     const timer = setTimeout(() => {
+      setVisibleCount(10);
       fetchInvoices(filters);
     }, 350);
 
@@ -327,10 +336,10 @@ export default function ManualInvoice() {
       items:
         invoice.items?.length > 0
           ? invoice.items.map((item) => ({
-              name: item.name || "",
-              quantity_kg: Number(item.quantity_kg || 0),
-              price_per_kg: Number(item.price_per_kg || 0),
-            }))
+            name: item.name || "",
+            quantity_kg: Number(item.quantity_kg || 0),
+            price_per_kg: Number(item.price_per_kg || 0),
+          }))
           : [{ ...emptyItem }],
     });
     setEditOpen(true);
@@ -426,14 +435,29 @@ export default function ManualInvoice() {
     }, 250);
   }
 
-  async function handleDelete(invoice) {
-    if (!confirm(`Delete invoice ${invoice.invoice_no}?`)) return;
+  // Change 2: replace handleDelete with openDelete + confirmDelete
+  function openDelete(invoice) {
+    setDeleteInvoice(invoice);
+    setDeleteOpen(true);
+  }
 
-    await api.delete(`/manual-invoices/${invoice.id}`);
-    await fetchInvoices();
+  async function confirmDelete() {
+    if (!deleteInvoice) return;
 
-    if (selectedInvoice?.id === invoice.id) {
-      setSelectedInvoice(null);
+    setDeleting(true);
+
+    try {
+      await api.delete(`/manual-invoices/${deleteInvoice.id}`);
+      await fetchInvoices();
+
+      if (selectedInvoice?.id === deleteInvoice.id) {
+        setSelectedInvoice(null);
+      }
+
+      setDeleteOpen(false);
+      setDeleteInvoice(null);
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -484,6 +508,7 @@ export default function ManualInvoice() {
               count={invoices.length}
             />
 
+            {/* Change 3: handleDelete={openDelete} */}
             <InvoiceList
               invoices={invoices}
               listLoading={listLoading}
@@ -491,7 +516,9 @@ export default function ManualInvoice() {
               openEdit={openEdit}
               handlePrint={handlePrint}
               handleDownloadImage={handleDownloadImage}
-              handleDelete={handleDelete}
+              handleDelete={openDelete}
+              visibleCount={visibleCount}
+              setVisibleCount={setVisibleCount}
             />
           </div>
         )}
@@ -603,6 +630,37 @@ export default function ManualInvoice() {
           </Modal>
         )}
 
+        {/* Delete confirmation modal — minimal yes / no */}
+        {deleteOpen && deleteInvoice && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4">
+            <div className="w-full max-w-sm rounded-[28px] border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-700 dark:bg-slate-900">
+              <p className="mb-1 text-center text-lg font-black text-slate-950 dark:text-white">
+                {deleteInvoice.invoice_no}
+              </p>
+              <p className="mb-6 text-center text-sm font-bold text-slate-500">
+                លុបវិក្កយបត្រនេះ?
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => setDeleteOpen(false)}
+                  className="rounded-2xl bg-slate-100 py-3 font-black text-slate-700 transition active:scale-95 dark:bg-slate-800 dark:text-slate-100"
+                >
+                  ទេ
+                </button>
+                <button
+                  type="button"
+                  onClick={confirmDelete}
+                  disabled={deleting}
+                  className="rounded-2xl bg-red-600 py-3 font-black text-white transition active:scale-95 disabled:opacity-50"
+                >
+                  {deleting ? "..." : "បាទ/ចាស"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         <style>{`
           .input-ui {
             width: 100%;
@@ -673,11 +731,10 @@ function TabButton({ active, onClick, children }) {
     <button
       type="button"
       onClick={onClick}
-      className={`rounded-xl px-4 py-3 text-sm font-black transition active:scale-95 ${
-        active
-          ? "bg-green-600 text-white shadow-sm"
-          : "text-slate-600 hover:text-green-700 dark:text-slate-300 dark:hover:text-white"
-      }`}
+      className={`rounded-xl px-4 py-3 text-sm font-black transition active:scale-95 ${active
+        ? "bg-green-600 text-white shadow-sm"
+        : "text-slate-600 hover:text-green-700 dark:text-slate-300 dark:hover:text-white"
+        }`}
     >
       {children}
     </button>
@@ -1094,7 +1151,21 @@ function InvoiceList({
   handlePrint,
   handleDownloadImage,
   handleDelete,
+  visibleCount,
+  setVisibleCount,
 }) {
+  const tableRef = useRef(null);
+
+  function scrollLeft() {
+    tableRef.current?.scrollBy({ left: -320, behavior: "smooth" });
+  }
+  function scrollRight() {
+    tableRef.current?.scrollBy({ left: 320, behavior: "smooth" });
+  }
+
+  const visible = invoices.slice(0, visibleCount);
+  const hasMore = visibleCount < invoices.length;
+
   return (
     <div className="rounded-[24px] border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
       <div className="flex flex-col gap-2 border-b border-slate-200 p-5 dark:border-slate-800 md:flex-row md:items-center md:justify-between">
@@ -1107,17 +1178,40 @@ function InvoiceList({
           </p>
         </div>
 
-        {listLoading && (
-          <span className="w-fit rounded-full bg-slate-100 px-4 py-2 text-xs font-black text-slate-600 dark:bg-slate-800 dark:text-slate-300">
-            កំពុងទាញ...
-          </span>
-        )}
+        <div className="flex items-center gap-3">
+          {listLoading && (
+            <span className="w-fit rounded-full bg-slate-100 px-4 py-2 text-xs font-black text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+              កំពុងទាញ...
+            </span>
+          )}
+        </div>
       </div>
+      <div className="hidden justify-center gap-3 bg-slate-50 py-4 dark:bg-[#070b18] xl:flex">
+        <button
+          type="button"
+          onClick={scrollLeft}
+          className="flex h-11 w-11 items-center justify-center rounded-xl bg-slate-800 font-black text-white transition hover:bg-slate-700 active:scale-95 dark:bg-slate-800 dark:text-slate-100"
+        >
+          ‹
+        </button>
 
+        <button
+          type="button"
+          onClick={scrollRight}
+          className="flex h-11 w-11 items-center justify-center rounded-xl bg-slate-800 font-black text-white transition hover:bg-slate-700 active:scale-95 dark:bg-slate-800 dark:text-slate-100"
+        >
+          ›
+        </button>
+      </div>
+      {/* Desktop table */}
       <div className="hidden xl:block">
-        <div className="overflow-x-auto">
+        <div
+          ref={tableRef}
+          className="overflow-x-auto"
+          style={{ scrollBehavior: "smooth" }}
+        >
           <table className="w-full min-w-[1500px] border-collapse text-sm">
-            <thead>
+            <thead className="sticky top-0 z-10">
               <tr className="bg-slate-100 text-slate-600 dark:bg-slate-950 dark:text-slate-300">
                 <TableHead>លេខវិក្កយបត្រ</TableHead>
                 <TableHead>អតិថិជន</TableHead>
@@ -1133,7 +1227,7 @@ function InvoiceList({
             </thead>
 
             <tbody>
-              {invoices.map((invoice) => (
+              {visible.map((invoice) => (
                 <tr
                   key={invoice.id}
                   className="border-t border-slate-200 transition hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-800/45"
@@ -1181,8 +1275,9 @@ function InvoiceList({
         </div>
       </div>
 
+      {/* Mobile cards */}
       <div className="space-y-3 p-4 xl:hidden">
-        {invoices.map((invoice) => (
+        {visible.map((invoice) => (
           <div
             key={invoice.id}
             className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-950"
@@ -1229,6 +1324,22 @@ function InvoiceList({
           </div>
         )}
       </div>
+
+      {/* Load more */}
+      {hasMore && (
+        <div className="border-t border-slate-200 p-4 text-center dark:border-slate-800">
+          <button
+            type="button"
+            onClick={() => setVisibleCount((c) => c + 10)}
+            className="rounded-2xl bg-slate-100 px-8 py-3 text-sm font-black text-slate-700 transition hover:bg-slate-200 active:scale-95 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"
+          >
+            មើលបន្ថែម {Math.min(10, invoices.length - visibleCount)} វិក្កយបត្រ
+            <span className="ml-2 text-slate-400">
+              ({visibleCount}/{invoices.length})
+            </span>
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -1236,9 +1347,8 @@ function InvoiceList({
 function TableHead({ children, align }) {
   return (
     <th
-      className={`whitespace-nowrap px-5 py-4 text-sm font-black ${
-        align === "right" ? "text-right" : "text-left"
-      }`}
+      className={`whitespace-nowrap px-5 py-4 text-sm font-black ${align === "right" ? "text-right" : "text-left"
+        }`}
     >
       {children}
     </th>
@@ -1248,13 +1358,11 @@ function TableHead({ children, align }) {
 function TableCell({ children, align, strong }) {
   return (
     <td
-      className={`whitespace-nowrap px-5 py-5 align-middle ${
-        align === "right" ? "text-right" : "text-left"
-      } ${
-        strong
+      className={`whitespace-nowrap px-5 py-5 align-middle ${align === "right" ? "text-right" : "text-left"
+        } ${strong
           ? "font-black text-slate-950 dark:text-white"
           : "font-bold text-slate-700 dark:text-slate-300"
-      }`}
+        }`}
     >
       {children}
     </td>
@@ -1516,11 +1624,10 @@ function SectionTitle({ title, subtitle }) {
 function StatBox({ label, value, danger }) {
   return (
     <div
-      className={`rounded-2xl p-4 ${
-        danger
-          ? "bg-red-50 dark:bg-red-950/30"
-          : "bg-slate-100 dark:bg-slate-800"
-      }`}
+      className={`rounded-2xl p-4 ${danger
+        ? "bg-red-50 dark:bg-red-950/30"
+        : "bg-slate-100 dark:bg-slate-800"
+        }`}
     >
       <p className={`text-sm font-black ${danger ? "text-red-500" : "text-slate-500"}`}>
         {label}
@@ -1537,13 +1644,12 @@ function SummaryLine({ label, value, strong, danger }) {
     <div className="flex items-center justify-between gap-4">
       <span className="font-bold text-slate-500 dark:text-slate-400">{label}</span>
       <span
-        className={`text-right font-black ${
-          danger
-            ? "text-red-600 dark:text-red-300"
-            : strong
+        className={`text-right font-black ${danger
+          ? "text-red-600 dark:text-red-300"
+          : strong
             ? "text-green-600 dark:text-green-400"
             : "text-slate-950 dark:text-white"
-        }`}
+          }`}
       >
         {value}
       </span>
@@ -1620,6 +1726,7 @@ function ModalActions({ loading, onCancel, submitLabel }) {
   );
 }
 
+// Change 5: Delete button always shown (removed !desktop condition)
 function ActionGroup({
   invoice,
   openPayment,
@@ -1632,13 +1739,12 @@ function ActionGroup({
 }) {
   return (
     <div
-      className={`gap-2 ${
-        mobile
-          ? "mt-4 grid grid-cols-2"
-          : desktop
+      className={`gap-2 ${mobile
+        ? "mt-4 grid grid-cols-2"
+        : desktop
           ? "flex justify-end"
           : "flex flex-wrap"
-      }`}
+        }`}
     >
       <ActionButton
         label="បង់ប្រាក់"
@@ -1653,14 +1759,12 @@ function ActionGroup({
         tone="emerald"
         onClick={() => handleDownloadImage(invoice)}
       />
-      {!desktop && (
-        <ActionButton
-          label="Delete"
-          tone="red"
-          onClick={() => handleDelete(invoice)}
-          wide={mobile}
-        />
-      )}
+      <ActionButton
+        label="លុប"
+        tone="red"
+        onClick={() => handleDelete(invoice)}
+        wide={mobile}
+      />
     </div>
   );
 }
@@ -1680,9 +1784,8 @@ function ActionButton({ label, tone, onClick, disabled, wide }) {
       type="button"
       disabled={disabled}
       onClick={onClick}
-      className={`rounded-xl px-3 py-3 text-sm font-black transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-40 ${
-        wide ? "col-span-2" : ""
-      } ${classes[tone] || classes.slate}`}
+      className={`rounded-xl px-3 py-3 text-sm font-black transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-40 ${wide ? "col-span-2" : ""
+        } ${classes[tone] || classes.slate}`}
     >
       {label}
     </button>
