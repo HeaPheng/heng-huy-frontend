@@ -1263,7 +1263,7 @@ export default function Stock() {
             </div>
 
             <div className="summary-box">
-              <span>សរុបសុទ្ធ</span>
+              <span>នៅសល់សរុប</span>
               <strong className={totalFilteredKg < 0 ? "net-negative" : ""}>
                 {formatKg(totalFilteredKg)}
               </strong>
