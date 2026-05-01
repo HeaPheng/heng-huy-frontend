@@ -13,6 +13,7 @@ const TYPES = ["A", "B", "C"];
 const GRADES = [1, 2, 3];
 const PRICE_OPTIONS = [800, 1000, 1200];
 const QUANTITY_OPTIONS = [5, 10, 15];
+const WALK_IN_CUSTOMER = "លក់ក្រៅ";
 
 function formatKg(kg) {
   const value = Number(kg || 0);
@@ -51,10 +52,22 @@ function parseMoneyInput(value) {
   return String(value || "").replace(/[^0-9]/g, "");
 }
 
+function parseDecimalInput(value) {
+  return String(value || "")
+    .replace(/[^0-9.]/g, "")
+    .replace(/(\..*)\./g, "$1");
+}
+
 function formatMoneyInput(value) {
   const raw = parseMoneyInput(value);
   if (!raw) return "";
   return Number(raw).toLocaleString();
+}
+
+function preventNumberControl(e) {
+  if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+    e.preventDefault();
+  }
 }
 
 export default function Sell() {
@@ -65,7 +78,7 @@ export default function Sell() {
   const [activeType, setActiveType] = useState("A");
   const [activeGrade, setActiveGrade] = useState(1);
 
-  const [customerName, setCustomerName] = useState("");
+  const [customerName, setCustomerName] = useState(WALK_IN_CUSTOMER);
   const [customerPhone, setCustomerPhone] = useState("");
   const [suggestions, setSuggestions] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -114,7 +127,7 @@ export default function Sell() {
   }, [products, activeType, activeGrade]);
 
   async function fetchCustomers(value) {
-    if (!value.trim()) {
+    if (!value.trim() || value.trim() === WALK_IN_CUSTOMER) {
       setSuggestions([]);
       return;
     }
@@ -274,13 +287,12 @@ export default function Sell() {
   async function handleSubmit(e) {
     e.preventDefault();
 
-    if (!customerName.trim()) {
-      alert("សូមបញ្ចូលឈ្មោះអតិថិជន។");
-      return;
-    }
+    const finalCustomerName = customerName.trim() || WALK_IN_CUSTOMER;
+    const finalCustomerPhone =
+      finalCustomerName === WALK_IN_CUSTOMER ? "" : customerPhone.trim();
 
-    if (!customerPhone.trim()) {
-      alert("សូមបញ្ចូលលេខទូរស័ព្ទអតិថិជន។");
+    if (finalCustomerName !== WALK_IN_CUSTOMER && !finalCustomerPhone) {
+      alert("សូមបញ្ចូលលេខទូរស័ព្ទសម្រាប់អតិថិជននេះ។");
       return;
     }
 
@@ -331,8 +343,8 @@ export default function Sell() {
     try {
       const res = await api.post("/sales", {
         sale_date: saleDate || today(),
-        customer_name: customerName.trim(),
-        customer_phone: customerPhone.trim(),
+        customer_name: finalCustomerName,
+        customer_phone: finalCustomerPhone,
         payment_method: paymentMethod,
         payment_status: paymentStatus,
         paid_amount: finalPaidAmount,
@@ -355,7 +367,7 @@ export default function Sell() {
       const productsRes = await api.get("/products");
       setProducts(productsRes.data);
 
-      setCustomerName("");
+      setCustomerName(WALK_IN_CUSTOMER);
       setCustomerPhone("");
       clearItemFields();
       setPaymentStatus("unpaid");
@@ -439,21 +451,45 @@ export default function Sell() {
                   <label className="mb-2 block text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
                     ឈ្មោះអតិថិជន
                   </label>
+
                   <input
                     value={customerName}
                     onChange={(e) => {
-                      setCustomerName(e.target.value);
-                      fetchCustomers(e.target.value);
+                      const value = e.target.value;
+                      setCustomerName(value);
+
+                      if (value === WALK_IN_CUSTOMER) {
+                        setCustomerPhone("");
+                      }
+
+                      fetchCustomers(value);
                       setShowSuggestions(true);
                     }}
                     onFocus={() => setShowSuggestions(true)}
-                    required
-                    placeholder="បញ្ចូលឈ្មោះអតិថិជន"
+                    placeholder="ជ្រើស លក់ក្រៅ ឬបញ្ចូលឈ្មោះអតិថិជន"
                     className="w-full rounded-xl border border-slate-200 dark:border-slate-700 dark:bg-slate-950 dark:text-white dark:placeholder:text-slate-500 px-4 py-3 outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100"
                   />
 
-                  {showSuggestions && suggestions.length > 0 && (
+                  {showSuggestions && (
                     <div className="absolute z-20 mt-2 w-full overflow-hidden rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-lg">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCustomerName(WALK_IN_CUSTOMER);
+                          setCustomerPhone("");
+                          setSuggestions([]);
+                          setShowSuggestions(false);
+                        }}
+                        className="block w-full px-4 py-3 text-left text-sm transition-colors hover:bg-green-50 dark:hover:bg-green-950/30"
+                      >
+                        <div className="font-bold dark:text-white">
+                          {WALK_IN_CUSTOMER}
+                        </div>
+                        <div className="text-xs text-slate-500 dark:text-slate-400">
+                          អតិថិជនទូទៅ មិនចាំបាច់លេខទូរស័ព្ទ
+                        </div>
+                      </button>
+
                       {suggestions.map((item) => (
                         <button
                           type="button"
@@ -465,7 +501,9 @@ export default function Sell() {
                           }}
                           className="block w-full px-4 py-3 text-left text-sm transition-colors hover:bg-green-50 dark:hover:bg-green-950/30"
                         >
-                          <div className="font-bold dark:text-white">{item.name}</div>
+                          <div className="font-bold dark:text-white">
+                            {item.name}
+                          </div>
                           <div className="text-xs text-slate-500 dark:text-slate-400">
                             {item.phone || "គ្មានលេខទូរស័ព្ទ"}
                           </div>
@@ -479,12 +517,17 @@ export default function Sell() {
                   <label className="mb-2 block text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
                     លេខទូរស័ព្ទ
                   </label>
+
                   <input
                     value={customerPhone}
                     onChange={(e) => setCustomerPhone(e.target.value)}
-                    required
-                    placeholder="បញ្ចូលលេខទូរស័ព្ទ"
-                    className="w-full rounded-xl border border-slate-200 dark:border-slate-700 dark:bg-slate-950 dark:text-white dark:placeholder:text-slate-500 px-4 py-3 outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100"
+                    disabled={customerName.trim() === WALK_IN_CUSTOMER}
+                    placeholder={
+                      customerName.trim() === WALK_IN_CUSTOMER
+                        ? "មិនចាំបាច់បញ្ចូល"
+                        : "បញ្ចូលលេខទូរស័ព្ទ"
+                    }
+                    className="w-full rounded-xl border border-slate-200 dark:border-slate-700 dark:bg-slate-950 dark:text-white dark:placeholder:text-slate-500 px-4 py-3 outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100 disabled:cursor-not-allowed disabled:opacity-60"
                   />
                 </div>
 
@@ -513,10 +556,11 @@ export default function Sell() {
                           setActiveType(type);
                           setActiveGrade(1);
                         }}
-                        className={`${optionButtonBase} ${activeType === type
+                        className={`${optionButtonBase} ${
+                          activeType === type
                             ? "border-green-600 bg-green-600 text-white hover:bg-green-700"
                             : "border-slate-200 bg-white text-slate-700 hover:border-green-300 hover:bg-green-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:hover:border-green-700 dark:hover:bg-green-950/30"
-                          }`}
+                        }`}
                       >
                         {TYPE_LABELS[type]}
                       </button>
@@ -534,30 +578,34 @@ export default function Sell() {
                         key={grade}
                         type="button"
                         onClick={() => setActiveGrade(grade)}
-                        className={`${optionButtonBase} ${activeGrade === grade
+                        className={`${optionButtonBase} ${
+                          activeGrade === grade
                             ? "border-green-600 bg-green-600 text-white hover:bg-green-700"
                             : "border-slate-200 bg-white text-slate-700 hover:border-green-300 hover:bg-green-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:hover:border-green-700 dark:hover:bg-green-950/30"
-                          }`}
+                        }`}
                       >
                         លេខ {grade}
                       </button>
                     ))}
                   </div>
                 </div>
+
                 <div>
                   <label className="mb-2 block text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
                     បរិមាណ
                   </label>
                   <div className="relative">
                     <input
-                      type="number"
-                      min="0"
-                      step="0.01"
+                      type="text"
+                      inputMode="decimal"
                       value={quantity}
-                      onChange={(e) => setQuantity(e.target.value)}
+                      onChange={(e) => setQuantity(parseDecimalInput(e.target.value))}
+                      onKeyDown={preventNumberControl}
+                      onWheel={(e) => e.currentTarget.blur()}
                       placeholder="0"
                       className="sell-no-spinner w-full rounded-xl border border-slate-200 dark:border-slate-700 dark:bg-slate-950 dark:text-white dark:placeholder:text-slate-500 px-4 py-3 pr-24 outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100"
                     />
+
                     <select
                       value=""
                       onChange={(e) => {
@@ -572,25 +620,29 @@ export default function Sell() {
                         </option>
                       ))}
                     </select>
+
                     <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-[10px] text-slate-500 dark:text-slate-400">
                       ▼
                     </span>
                   </div>
                 </div>
+
                 <div>
                   <label className="mb-2 block text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
                     តម្លៃក្នុង ១ គីឡូ
                   </label>
                   <div className="relative">
                     <input
-                      type="number"
-                      min="0"
-                      step="1"
+                      type="text"
+                      inputMode="numeric"
                       value={pricePerKg}
-                      onChange={(e) => setPricePerKg(e.target.value)}
+                      onChange={(e) => setPricePerKg(parseMoneyInput(e.target.value))}
+                      onKeyDown={preventNumberControl}
+                      onWheel={(e) => e.currentTarget.blur()}
                       placeholder="0"
                       className="sell-no-spinner w-full rounded-xl border border-slate-200 dark:border-slate-700 dark:bg-slate-950 dark:text-white dark:placeholder:text-slate-500 px-4 py-3 pr-24 outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100"
                     />
+
                     <select
                       value=""
                       onChange={(e) => {
@@ -605,12 +657,12 @@ export default function Sell() {
                         </option>
                       ))}
                     </select>
+
                     <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-[10px] text-slate-500 dark:text-slate-400">
                       ▼
                     </span>
                   </div>
                 </div>
-
 
                 <div>
                   <label className="mb-2 block text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
@@ -664,20 +716,22 @@ export default function Sell() {
                         setHasDelivery(false);
                         setDeliveryFee("");
                       }}
-                      className={`${fullOptionButtonBase} ${!hasDelivery
+                      className={`${fullOptionButtonBase} ${
+                        !hasDelivery
                           ? "border-green-600 bg-green-600 text-white hover:bg-green-700"
                           : "border-slate-200 bg-white text-slate-700 hover:border-green-300 hover:bg-green-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:hover:border-green-700 dark:hover:bg-green-950/30"
-                        }`}
+                      }`}
                     >
                       មិនមានថ្លៃដឹក
                     </button>
                     <button
                       type="button"
                       onClick={() => setHasDelivery(true)}
-                      className={`${fullOptionButtonBase} ${hasDelivery
+                      className={`${fullOptionButtonBase} ${
+                        hasDelivery
                           ? "border-green-600 bg-green-600 text-white hover:bg-green-700"
                           : "border-slate-200 bg-white text-slate-700 hover:border-green-300 hover:bg-green-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:hover:border-green-700 dark:hover:bg-green-950/30"
-                        }`}
+                      }`}
                     >
                       មានថ្លៃដឹក
                     </button>
@@ -702,30 +756,33 @@ export default function Sell() {
                     <button
                       type="button"
                       onClick={() => selectPaymentStatus("paid")}
-                      className={`${fullOptionButtonBase} ${paymentStatus === "paid"
+                      className={`${fullOptionButtonBase} ${
+                        paymentStatus === "paid"
                           ? "border-green-600 bg-green-600 text-white hover:bg-green-700"
                           : "border-slate-200 bg-white text-slate-700 hover:border-green-300 hover:bg-green-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:hover:border-green-700 dark:hover:bg-green-950/30"
-                        }`}
+                      }`}
                     >
                       បានទូទាត់
                     </button>
                     <button
                       type="button"
                       onClick={() => selectPaymentStatus("debt")}
-                      className={`${fullOptionButtonBase} ${paymentStatus === "debt"
+                      className={`${fullOptionButtonBase} ${
+                        paymentStatus === "debt"
                           ? "border-yellow-600 bg-yellow-500 text-white hover:bg-yellow-600"
                           : "border-slate-200 bg-white text-slate-700 hover:border-yellow-300 hover:bg-yellow-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:hover:border-yellow-700 dark:hover:bg-yellow-950/30"
-                        }`}
+                      }`}
                     >
                       កក់ប្រាក់
                     </button>
                     <button
                       type="button"
                       onClick={() => selectPaymentStatus("unpaid")}
-                      className={`${fullOptionButtonBase} ${paymentStatus === "unpaid"
+                      className={`${fullOptionButtonBase} ${
+                        paymentStatus === "unpaid"
                           ? "border-red-600 bg-red-600 text-white hover:bg-red-700"
                           : "border-slate-200 bg-white text-slate-700 hover:border-red-300 hover:bg-red-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:hover:border-red-700 dark:hover:bg-red-950/30"
-                        }`}
+                      }`}
                     >
                       មិនទាន់ទូទាត់
                     </button>
@@ -755,20 +812,22 @@ export default function Sell() {
                     <button
                       type="button"
                       onClick={() => setPaymentMethod("cash")}
-                      className={`${fullOptionButtonBase} ${paymentMethod === "cash"
+                      className={`${fullOptionButtonBase} ${
+                        paymentMethod === "cash"
                           ? "border-green-600 bg-green-600 text-white hover:bg-green-700"
                           : "border-slate-200 bg-white text-slate-700 hover:border-green-300 hover:bg-green-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:hover:border-green-700 dark:hover:bg-green-950/30"
-                        }`}
+                      }`}
                     >
                       សាច់ប្រាក់
                     </button>
                     <button
                       type="button"
                       onClick={() => setPaymentMethod("qr")}
-                      className={`${fullOptionButtonBase} ${paymentMethod === "qr"
+                      className={`${fullOptionButtonBase} ${
+                        paymentMethod === "qr"
                           ? "border-green-600 bg-green-600 text-white hover:bg-green-700"
                           : "border-slate-200 bg-white text-slate-700 hover:border-green-300 hover:bg-green-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:hover:border-green-700 dark:hover:bg-green-950/30"
-                        }`}
+                      }`}
                     >
                       QR
                     </button>
@@ -803,7 +862,7 @@ export default function Sell() {
               </h2>
 
               <div className="space-y-4 text-sm">
-                <Row label="អតិថិជន" value={customerName || "—"} />
+                <Row label="អតិថិជន" value={customerName || WALK_IN_CUSTOMER} />
                 <Row label="ទូរស័ព្ទ" value={customerPhone || "—"} />
                 <Row label="កាលបរិច្ឆេទលក់" value={saleDate || today()} />
                 <Row label="ស្ថានភាពទូទាត់" value={paymentStatusLabel(paymentStatus)} />
@@ -879,7 +938,11 @@ export default function Sell() {
                 <div className="border-t border-slate-200 dark:border-slate-700 pt-5 space-y-3">
                   <Row label="សរុប" value={formatRiel(totalPreview)} strong />
                   <Row label="បានបង់" value={formatRiel(paidPreview)} />
-                  <Row label="នៅសល់" value={formatRiel(balancePreview)} danger={balancePreview > 0} />
+                  <Row
+                    label="នៅសល់"
+                    value={formatRiel(balancePreview)}
+                    danger={balancePreview > 0}
+                  />
                 </div>
               </div>
 
@@ -990,12 +1053,13 @@ function Row({ label, value, strong, danger }) {
     <div className="flex justify-between gap-4">
       <span className="text-slate-500 dark:text-slate-400">{label}</span>
       <span
-        className={`text-right font-bold ${danger
+        className={`text-right font-bold ${
+          danger
             ? "text-red-600 dark:text-red-400"
             : strong
               ? "text-green-600 dark:text-green-400"
               : "dark:text-white"
-          }`}
+        }`}
       >
         {value}
       </span>

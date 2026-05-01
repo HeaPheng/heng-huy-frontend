@@ -1435,6 +1435,45 @@ function InvoiceInfoCard({ form, setForm, paymentStatus }) {
 }
 
 function ItemsCard({ items, updateItem, addItem, removeItem }) {
+  const nameRefs = useRef([]);
+  const prevLengthRef = useRef(items.length);
+
+  useEffect(() => {
+    if (items.length > prevLengthRef.current) {
+      setTimeout(() => {
+        nameRefs.current[items.length - 1]?.focus();
+      }, 50);
+    }
+
+    prevLengthRef.current = items.length;
+  }, [items.length]);
+
+  function isItemComplete(item) {
+    return (
+      item.name.trim() &&
+      Number(item.quantity_kg || 0) > 0 &&
+      Number(item.price_per_kg || 0) > 0
+    );
+  }
+
+  function handleItemEnter(e, index) {
+    if (e.key !== "Enter") return;
+
+    e.preventDefault();
+
+    const currentItem = items[index];
+
+    if (!isItemComplete(currentItem)) {
+      return;
+    }
+
+    if (items.length >= 10) {
+      return;
+    }
+
+    addItem();
+  }
+
   return (
     <div className="rounded-[28px] border border-green-100 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900 md:p-6">
       <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
@@ -1471,31 +1510,42 @@ function ItemsCard({ items, updateItem, addItem, removeItem }) {
               return (
                 <tr key={index} className="border-t border-slate-200 dark:border-slate-700">
                   <td className="p-3 text-sm font-black">{index + 1}</td>
+
                   <td className="p-3">
                     <input
+                      ref={(el) => {
+                        nameRefs.current[index] = el;
+                      }}
                       value={item.name}
                       onChange={(e) => updateItem(index, "name", e.target.value)}
+                      onKeyDown={(e) => handleItemEnter(e, index)}
                       placeholder="ឈ្មោះទំនិញ"
                       className="input-ui"
                     />
                   </td>
+
                   <td className="p-3">
                     <input
                       type="number"
                       value={item.quantity_kg}
                       onChange={(e) => updateItem(index, "quantity_kg", e.target.value)}
+                      onKeyDown={(e) => handleItemEnter(e, index)}
                       className="input-ui text-right"
                     />
                   </td>
+
                   <td className="p-3">
                     <input
                       type="number"
                       value={item.price_per_kg}
                       onChange={(e) => updateItem(index, "price_per_kg", e.target.value)}
+                      onKeyDown={(e) => handleItemEnter(e, index)}
                       className="input-ui text-right"
                     />
                   </td>
+
                   <td className="p-3 text-right font-black">{formatRiel(subtotal)}</td>
+
                   <td className="p-3 text-center">
                     <button
                       type="button"
@@ -1538,8 +1588,12 @@ function ItemsCard({ items, updateItem, addItem, removeItem }) {
               <div className="grid gap-3">
                 <InputBlock label="ឈ្មោះទំនិញ">
                   <input
+                    ref={(el) => {
+                      nameRefs.current[index] = el;
+                    }}
                     value={item.name}
                     onChange={(e) => updateItem(index, "name", e.target.value)}
+                    onKeyDown={(e) => handleItemEnter(e, index)}
                     className="input-ui"
                     placeholder="ឈ្មោះទំនិញ"
                   />
@@ -1551,6 +1605,7 @@ function ItemsCard({ items, updateItem, addItem, removeItem }) {
                       type="number"
                       value={item.quantity_kg}
                       onChange={(e) => updateItem(index, "quantity_kg", e.target.value)}
+                      onKeyDown={(e) => handleItemEnter(e, index)}
                       className="input-ui"
                     />
                   </InputBlock>
@@ -1560,6 +1615,7 @@ function ItemsCard({ items, updateItem, addItem, removeItem }) {
                       type="number"
                       value={item.price_per_kg}
                       onChange={(e) => updateItem(index, "price_per_kg", e.target.value)}
+                      onKeyDown={(e) => handleItemEnter(e, index)}
                       className="input-ui"
                     />
                   </InputBlock>
