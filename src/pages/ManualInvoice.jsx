@@ -1440,13 +1440,20 @@ function ItemsCard({ items, updateItem, addItem, removeItem }) {
 
   useEffect(() => {
     if (items.length > prevLengthRef.current) {
-      setTimeout(() => {
-        nameRefs.current[items.length - 1]?.focus();
-        nameRefs.current[items.length - 1]?.scrollIntoView({
-          behavior: "smooth",
-          block: "center",
-        });
-      }, 80);
+      requestAnimationFrame(() => {
+        setTimeout(() => {
+          const nextInput = nameRefs.current[items.length - 1];
+
+          if (nextInput) {
+            nextInput.focus({ preventScroll: true });
+            nextInput.select();
+            nextInput.scrollIntoView({
+              behavior: "smooth",
+              block: "center",
+            });
+          }
+        }, 150);
+      });
     }
 
     prevLengthRef.current = items.length;
@@ -1522,7 +1529,7 @@ function ItemsCard({ items, updateItem, addItem, removeItem }) {
                       }}
                       value={item.name}
                       onChange={(e) => updateItem(index, "name", e.target.value)}
-                      onKeyDown={(e) => handleItemEnter(e, index)}
+                      onKeyDownCapture={(e) => handleItemEnter(e, index)}
                       placeholder="ឈ្មោះទំនិញ"
                       className="input-ui"
                     />
@@ -1533,7 +1540,7 @@ function ItemsCard({ items, updateItem, addItem, removeItem }) {
                       type="number"
                       value={item.quantity_kg}
                       onChange={(e) => updateItem(index, "quantity_kg", e.target.value)}
-                      onKeyDown={(e) => handleItemEnter(e, index)}
+                      onKeyDownCapture={(e) => handleItemEnter(e, index)}
                       className="input-ui text-right"
                     />
                   </td>
@@ -1543,7 +1550,7 @@ function ItemsCard({ items, updateItem, addItem, removeItem }) {
                       type="number"
                       value={item.price_per_kg}
                       onChange={(e) => updateItem(index, "price_per_kg", e.target.value)}
-                      onKeyDown={(e) => handleItemEnter(e, index)}
+                      onKeyDownCapture={(e) => handleItemEnter(e, index)}
                       className="input-ui text-right"
                     />
                   </td>
@@ -1597,7 +1604,7 @@ function ItemsCard({ items, updateItem, addItem, removeItem }) {
                     }}
                     value={item.name}
                     onChange={(e) => updateItem(index, "name", e.target.value)}
-                    onKeyDown={(e) => handleItemEnter(e, index)}
+                    onKeyDownCapture={(e) => handleItemEnter(e, index)}
                     className="input-ui"
                     placeholder="ឈ្មោះទំនិញ"
                   />
@@ -1609,7 +1616,7 @@ function ItemsCard({ items, updateItem, addItem, removeItem }) {
                       type="number"
                       value={item.quantity_kg}
                       onChange={(e) => updateItem(index, "quantity_kg", e.target.value)}
-                      onKeyDown={(e) => handleItemEnter(e, index)}
+                      onKeyDownCapture={(e) => handleItemEnter(e, index)}
                       className="input-ui"
                     />
                   </InputBlock>
@@ -1619,7 +1626,7 @@ function ItemsCard({ items, updateItem, addItem, removeItem }) {
                       type="number"
                       value={item.price_per_kg}
                       onChange={(e) => updateItem(index, "price_per_kg", e.target.value)}
-                      onKeyDown={(e) => handleItemEnter(e, index)}
+                      onKeyDownCapture={(e) => handleItemEnter(e, index)}
                       className="input-ui"
                     />
                   </InputBlock>
