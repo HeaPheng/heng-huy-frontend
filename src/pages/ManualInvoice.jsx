@@ -1435,25 +1435,25 @@ function InvoiceInfoCard({ form, setForm, paymentStatus }) {
 }
 
 function ItemsCard({ items, updateItem, addItem, removeItem }) {
-  const nameRefs = useRef([]);
+  const desktopNameRefs = useRef([]);
+  const mobileNameRefs = useRef([]);
+  const pendingFocusRef = useRef(false);
   const prevLengthRef = useRef(items.length);
 
   useEffect(() => {
-    if (items.length > prevLengthRef.current) {
-      requestAnimationFrame(() => {
-        setTimeout(() => {
-          const nextInput = nameRefs.current[items.length - 1];
+    if (pendingFocusRef.current && items.length > prevLengthRef.current) {
+      pendingFocusRef.current = false;
 
-          if (nextInput) {
-            nextInput.focus({ preventScroll: true });
-            nextInput.select();
-            nextInput.scrollIntoView({
-              behavior: "smooth",
-              block: "center",
-            });
-          }
-        }, 150);
-      });
+      setTimeout(() => {
+        const isDesktop = window.matchMedia("(min-width: 768px)").matches;
+        const target = isDesktop
+          ? desktopNameRefs.current[items.length - 1]
+          : mobileNameRefs.current[items.length - 1];
+
+        target?.focus();
+        target?.select();
+        target?.scrollIntoView({ behavior: "smooth", block: "center" });
+      }, 80);
     }
 
     prevLengthRef.current = items.length;
@@ -1471,17 +1471,12 @@ function ItemsCard({ items, updateItem, addItem, removeItem }) {
     if (e.key !== "Enter") return;
 
     e.preventDefault();
+    e.stopPropagation();
 
-    const currentItem = items[index];
+    if (!isItemComplete(items[index])) return;
+    if (items.length >= 10) return;
 
-    if (!isItemComplete(currentItem)) {
-      return;
-    }
-
-    if (items.length >= 10) {
-      return;
-    }
-
+    pendingFocusRef.current = true;
     addItem();
   }
 
@@ -1492,7 +1487,10 @@ function ItemsCard({ items, updateItem, addItem, removeItem }) {
 
         <button
           type="button"
-          onClick={addItem}
+          onClick={() => {
+            pendingFocusRef.current = true;
+            addItem();
+          }}
           disabled={items.length >= 10}
           className="rounded-2xl bg-slate-950 px-5 py-3 text-sm font-black text-white transition active:scale-95 disabled:opacity-40 dark:bg-white dark:text-slate-950"
         >
@@ -1525,7 +1523,7 @@ function ItemsCard({ items, updateItem, addItem, removeItem }) {
                   <td className="p-3">
                     <input
                       ref={(el) => {
-                        nameRefs.current[index] = el;
+                        desktopNameRefs.current[index] = el;
                       }}
                       value={item.name}
                       onChange={(e) => updateItem(index, "name", e.target.value)}
@@ -1600,7 +1598,7 @@ function ItemsCard({ items, updateItem, addItem, removeItem }) {
                 <InputBlock label="ឈ្មោះទំនិញ">
                   <input
                     ref={(el) => {
-                      nameRefs.current[index] = el;
+                      mobileNameRefs.current[index] = el;
                     }}
                     value={item.name}
                     onChange={(e) => updateItem(index, "name", e.target.value)}
@@ -1643,7 +1641,6 @@ function ItemsCard({ items, updateItem, addItem, removeItem }) {
     </div>
   );
 }
-
 function PaymentHistory({ payments }) {
   return (
     <div>
