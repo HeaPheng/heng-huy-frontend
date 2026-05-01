@@ -1,110 +1,131 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import api from "../api";
 
-const DEFAULT_VISIBLE_DAYS = 7;
 const LOAD_MORE_DAYS = 7;
 
 export default function DailySalesHistory() {
   const [products, setProducts] = useState([]);
   const [selectedProductId, setSelectedProductId] = useState("overall");
-  const [rows, setRows] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [visibleDays, setVisibleDays] = useState(DEFAULT_VISIBLE_DAYS);
-  const [dateFilterType, setDateFilterType] = useState("recent");
+
+  // Today's rows — loaded first, shown immediately
+  const [todayRows, setTodayRows] = useState([]);
+  const [todayLoading, setTodayLoading] = useState(true);
+  const [todayError, setTodayError] = useState("");
+
+  // Full history rows — loaded in background after today appears
+  const [allRows, setAllRows] = useState([]);
+  const [backgroundLoading, setBackgroundLoading] = useState(false);
+  const [backgroundReady, setBackgroundReady] = useState(false);
+
+  const [visibleDays, setVisibleDays] = useState(7);
+  const [dateFilterType, setDateFilterType] = useState("today");
   const [selectedDay, setSelectedDay] = useState(todayDate());
   const [selectedWeek, setSelectedWeek] = useState(getCurrentWeekValue());
   const [selectedMonth, setSelectedMonth] = useState(todayDate().slice(0, 7));
 
+  // Track current product selection to cancel stale fetches
+  const fetchKeyRef = useRef(0);
+
+  // ─── Load products once ───────────────────────────────────────────────────
   useEffect(() => {
     async function loadProducts() {
       try {
-        setLoading(true);
-        setError("");
-
-        const productsRes = await api.get(`/products?t=${Date.now()}`);
-        const productsData = productsRes.data;
-
-        const productList = Array.isArray(productsData)
-          ? productsData
-          : Array.isArray(productsData.data)
-            ? productsData.data
-            : [];
-
-        setProducts(productList);
-        setSelectedProductId("overall");
+        const res = await api.get("/products");
+        const data = res.data;
+        const list = Array.isArray(data) ? data : Array.isArray(data.data) ? data.data : [];
+        setProducts(list);
       } catch (err) {
         console.error(err);
-        setError("មិនអាចទាញយកផលិតផលបានទេ");
-      } finally {
-        setLoading(false);
+        setTodayError("មិនអាចទាញយកផលិតផលបានទេ");
+        setTodayLoading(false);
       }
     }
-
     loadProducts();
   }, []);
 
+  // ─── Two-phase fetch whenever product or selection changes ────────────────
   useEffect(() => {
-    if (products.length === 0) {
-      setRows([]);
-      return;
-    }
+    if (products.length === 0) return;
 
-    async function loadHistory() {
-      try {
-        setLoading(true);
-        setError("");
+    const fetchKey = ++fetchKeyRef.current;
 
-        if (selectedProductId === "overall") {
-          const histories = await Promise.all(
-            products.map(async (product) => {
-              try {
-                const res = await api.get(
-                  `/products/${product.id}/daily-history?t=${Date.now()}`
-                );
+    setTodayRows([]);
+    setAllRows([]);
+    setBackgroundReady(false);
+    setTodayLoading(true);
+    setTodayError("");
 
-                const data = Array.isArray(res.data) ? res.data : res.data.data || [];
-
-                return data.map((row) => ({
-                  ...row,
-                  product_id: product.id,
-                  product_name: getProductKhmerName(product),
-                }));
-              } catch (err) {
-                console.error("Daily history failed for product", product.id, err);
-                return [];
-              }
-            })
-          );
-
-          setRows(aggregateRowsByDate(histories.flat()));
-          return;
-        }
-
-        const historyRes = await api.get(
-          `/products/${selectedProductId}/daily-history?t=${Date.now()}`
+    async function fetchHistory(isToday) {
+      if (selectedProductId === "overall") {
+        const results = await Promise.all(
+          products.map(async (product) => {
+            try {
+              const res = await api.get(`/products/${product.id}/daily-history`);
+              const data = Array.isArray(res.data) ? res.data : res.data.data || [];
+              return data.map((row) => ({
+                ...row,
+                product_id: product.id,
+                product_name: getProductKhmerName(product),
+              }));
+            } catch {
+              return [];
+            }
+          })
         );
+        const aggregated = aggregateRowsByDate(results.flat());
 
-        const historyData = historyRes.data;
-        const historyRows = Array.isArray(historyData)
-          ? historyData
-          : historyData.data || [];
+        if (isToday) {
+          return aggregated.filter((r) => r.date === todayDate());
+        }
+        return aggregated;
+      } else {
+        const res = await api.get(`/products/${selectedProductId}/daily-history`);
+        const data = Array.isArray(res.data) ? res.data : res.data.data || [];
+        const sorted = sortRowsNewest(data);
 
-        setRows(sortRowsNewest(historyRows));
-      } catch (err) {
-        console.error(err);
-        setError("មិនអាចទាញយកប្រវត្តិលក់ប្រចាំថ្ងៃបានទេ");
-        setRows([]);
-      } finally {
-        setLoading(false);
+        if (isToday) {
+          return sorted.filter((r) => r.date === todayDate());
+        }
+        return sorted;
       }
     }
 
-    loadHistory();
+    // Phase 1 — fetch and show today's rows immediately
+    async function phase1() {
+      try {
+        const rows = await fetchHistory(true);
+        if (fetchKeyRef.current !== fetchKey) return;
+        setTodayRows(rows);
+      } catch (err) {
+        if (fetchKeyRef.current !== fetchKey) return;
+        console.error(err);
+        setTodayError("មិនអាចទាញយកប្រវត្តិថ្ងៃនេះបានទេ");
+      } finally {
+        if (fetchKeyRef.current === fetchKey) setTodayLoading(false);
+      }
+    }
+
+    // Phase 2 — fetch full history in background
+    async function phase2() {
+      setBackgroundLoading(true);
+      try {
+        const rows = await fetchHistory(false);
+        if (fetchKeyRef.current !== fetchKey) return;
+        setAllRows(rows);
+        setBackgroundReady(true);
+      } catch (err) {
+        console.error("Background history fetch failed:", err);
+      } finally {
+        if (fetchKeyRef.current === fetchKey) setBackgroundLoading(false);
+      }
+    }
+
+    phase1().then(() => phase2());
   }, [selectedProductId, products]);
 
+  // Reset visible days when filters change
   useEffect(() => {
-    setVisibleDays(DEFAULT_VISIBLE_DAYS);
+    setVisibleDays(7);
   }, [selectedProductId, dateFilterType, selectedDay, selectedWeek, selectedMonth]);
 
   const selectedProduct = useMemo(() => {
@@ -112,26 +133,34 @@ export default function DailySalesHistory() {
     return products.find((p) => String(p.id) === String(selectedProductId));
   }, [products, selectedProductId]);
 
+  // Use todayRows for "today" filter (available immediately),
+  // fall back to allRows for everything else (available after background load)
+  const activeRows = useMemo(() => {
+    if (dateFilterType === "today") return todayRows;
+    return allRows;
+  }, [dateFilterType, todayRows, allRows]);
+
+  const loading = dateFilterType === "today" ? todayLoading : !backgroundReady;
+  const error = dateFilterType === "today" ? todayError : "";
+
   const filteredRows = useMemo(() => {
-    const sorted = sortRowsNewest(rows);
+    const sorted = sortRowsNewest(activeRows);
+
+    if (dateFilterType === "today") return sorted;
 
     if (dateFilterType === "day") {
       return sorted.filter((row) => row.date === selectedDay);
     }
-
     if (dateFilterType === "week") {
       const range = getWeekRange(selectedWeek);
       if (!range) return sorted;
-
       return sorted.filter((row) => row.date >= range.start && row.date <= range.end);
     }
-
     if (dateFilterType === "month") {
       return sorted.filter((row) => String(row.date || "").startsWith(selectedMonth));
     }
-
     return sorted;
-  }, [rows, dateFilterType, selectedDay, selectedWeek, selectedMonth]);
+  }, [activeRows, dateFilterType, selectedDay, selectedWeek, selectedMonth]);
 
   const visibleRows = useMemo(() => {
     if (dateFilterType !== "recent") return filteredRows;
@@ -176,12 +205,19 @@ export default function DailySalesHistory() {
           <h1 className="text-2xl font-black text-slate-950 dark:text-white md:text-3xl">
             ប្រវត្តិលក់ប្រចាំថ្ងៃ
           </h1>
-          <p className="mt-1 text-sm font-semibold text-slate-500 dark:text-slate-400">
-            កំពុងបង្ហាញ៖ {displayTitle}
+          <p className="mt-1 flex items-center gap-2 text-sm font-semibold text-slate-500 dark:text-slate-400">
+            <span>កំពុងបង្ហាញ៖ {displayTitle}</span>
+            {backgroundLoading && dateFilterType !== "today" && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+                <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-slate-400" />
+                កំពុងទាញទិន្នន័យ...
+              </span>
+            )}
           </p>
         </div>
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-[260px_190px_180px]">
+          {/* Product selector */}
           <select
             value={selectedProductId}
             onChange={(e) => setSelectedProductId(e.target.value)}
@@ -195,17 +231,19 @@ export default function DailySalesHistory() {
             ))}
           </select>
 
+          {/* Date filter type */}
           <select
             value={dateFilterType}
             onChange={(e) => setDateFilterType(e.target.value)}
             className="w-full rounded-2xl border border-green-200 bg-white px-4 py-3 font-bold text-slate-800 shadow-sm outline-none transition-colors focus:border-green-600 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
           >
-            <option value="recent">7 ថ្ងៃថ្មីៗ</option>
+            <option value="today">ថ្ងៃនេះ</option>
             <option value="day">ជ្រើសថ្ងៃ</option>
             <option value="week">ជ្រើសសប្តាហ៍</option>
             <option value="month">ជ្រើសខែ</option>
           </select>
 
+          {/* Date pickers */}
           {dateFilterType === "day" && (
             <input
               type="date"
@@ -214,7 +252,6 @@ export default function DailySalesHistory() {
               className="w-full rounded-2xl border border-green-200 bg-white px-4 py-3 font-bold text-slate-800 shadow-sm outline-none transition-colors focus:border-green-600 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
             />
           )}
-
           {dateFilterType === "week" && (
             <input
               type="week"
@@ -223,7 +260,6 @@ export default function DailySalesHistory() {
               className="w-full rounded-2xl border border-green-200 bg-white px-4 py-3 font-bold text-slate-800 shadow-sm outline-none transition-colors focus:border-green-600 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
             />
           )}
-
           {dateFilterType === "month" && (
             <input
               type="month"
@@ -235,12 +271,9 @@ export default function DailySalesHistory() {
         </div>
       </section>
 
+      {/* Summary cards */}
       <section className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <Card
-          title="លក់សរុប"
-          value={formatKg(summary.totalSold)}
-          note="ចំនួនគីឡូដែលបានលក់"
-        />
+        <Card title="លក់សរុប" value={formatKg(summary.totalSold)} note="ចំនួនគីឡូដែលបានលក់" />
         <Card
           title="បន្ថែមស្តុក"
           value={formatKg(summary.totalAdded)}
@@ -259,6 +292,7 @@ export default function DailySalesHistory() {
         />
       </section>
 
+      {/* Table section */}
       <section className="rounded-2xl border border-green-200 bg-white p-4 shadow-sm transition-colors dark:border-slate-800 dark:bg-slate-900 md:p-5">
         <div className="mb-5 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
           <div>
@@ -266,33 +300,42 @@ export default function DailySalesHistory() {
               តារាងប្រវត្តិប្រចាំថ្ងៃ
             </h2>
             <p className="mt-1 text-sm font-semibold text-slate-500 dark:text-slate-400">
-              {dateFilterType === "recent"
-                ? "បង្ហាញ 7 ថ្ងៃចុងក្រោយជាមុន។ ចុចមើលបន្ថែម ដើម្បីបង្ហាញ 7 ថ្ងៃបន្ថែម។"
+              {dateFilterType === "today"
+                ? "កំពុងបង្ហាញប្រវត្តិថ្ងៃនេះ"
                 : "កំពុងបង្ហាញតាមកាលបរិច្ឆេទដែលបានជ្រើស"}
             </p>
           </div>
 
-          {dateFilterType !== "recent" && (
+          {dateFilterType !== "today" && (
             <button
               type="button"
-              onClick={() => setDateFilterType("recent")}
+              onClick={() => setDateFilterType("today")}
               className="w-fit rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-black text-slate-700 transition active:scale-95 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
             >
-              ត្រឡប់ទៅ 7 ថ្ងៃថ្មីៗ
+              ត្រឡប់ទៅថ្ងៃនេះ
             </button>
           )}
         </div>
 
-        {error ? (
-          <div className="py-8 text-center font-bold text-red-600 dark:text-red-400">
-            {error}
+        {/* Background loading banner for non-today filters */}
+        {dateFilterType !== "today" && backgroundLoading && !backgroundReady && (
+          <div className="mb-4 flex items-center gap-3 rounded-xl border border-green-100 bg-green-50 px-4 py-3 dark:border-green-900/40 dark:bg-green-950/20">
+            <span className="h-2 w-2 animate-pulse rounded-full bg-green-500" />
+            <p className="text-sm font-bold text-green-700 dark:text-green-400">
+              កំពុងទាញប្រវត្តិទាំងអស់... សូមរង់ចាំបន្តិច
+            </p>
           </div>
+        )}
+
+        {error ? (
+          <div className="py-8 text-center font-bold text-red-600 dark:text-red-400">{error}</div>
         ) : loading ? (
           <div className="py-8 text-center font-bold text-slate-500 dark:text-slate-400">
             កំពុងទាញយកទិន្នន័យ...
           </div>
         ) : (
           <>
+            {/* Desktop table */}
             <div className="hidden overflow-x-auto md:block">
               <table className="w-full min-w-[1100px] text-sm">
                 <thead>
@@ -307,12 +350,9 @@ export default function DailySalesHistory() {
                     <th className="py-3 text-right">ចំនួនប្រាក់</th>
                   </tr>
                 </thead>
-
                 <tbody>
                   {visibleRows.length > 0 ? (
-                    visibleRows.map((row) => (
-                      <DailyRow key={row.date} row={row} />
-                    ))
+                    visibleRows.map((row) => <DailyRow key={row.date} row={row} />)
                   ) : (
                     <tr>
                       <td
@@ -327,6 +367,7 @@ export default function DailySalesHistory() {
               </table>
             </div>
 
+            {/* Mobile cards */}
             <div className="space-y-3 md:hidden">
               {visibleRows.length > 0 ? (
                 visibleRows.map((row) => <DailyMobileCard key={row.date} row={row} />)
@@ -358,15 +399,13 @@ export default function DailySalesHistory() {
   );
 }
 
+// ─── Sub-components ────────────────────────────────────────────────────────────
+
 function DailyRow({ row }) {
   return (
     <tr className="border-b border-green-100 last:border-b-0 dark:border-slate-800">
-      <td className="py-3 font-bold text-slate-900 dark:text-white">
-        {formatDate(row.date)}
-      </td>
-      <td className="py-3 text-slate-700 dark:text-slate-300">
-        {formatKg(row.first_stock_kg)}
-      </td>
+      <td className="py-3 font-bold text-slate-900 dark:text-white">{formatDate(row.date)}</td>
+      <td className="py-3 text-slate-700 dark:text-slate-300">{formatKg(row.first_stock_kg)}</td>
       <td className="py-3 font-bold text-green-700 dark:text-green-400">
         + {formatKg(row.added_kg)}
       </td>
@@ -376,9 +415,7 @@ function DailyRow({ row }) {
       <td className="py-3 font-black text-slate-900 dark:text-white">
         {formatKg(row.last_stock_kg)}
       </td>
-      <td className="py-3 text-slate-700 dark:text-slate-300">
-        {row.invoice_count}
-      </td>
+      <td className="py-3 text-slate-700 dark:text-slate-300">{row.invoice_count}</td>
       <td className="py-3 text-slate-700 dark:text-slate-300">
         {row.product_count ? `${row.product_count} មុខ` : row.product_name || "-"}
       </td>
@@ -394,9 +431,7 @@ function DailyMobileCard({ row }) {
     <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-950">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="font-black text-slate-950 dark:text-white">
-            {formatDate(row.date)}
-          </p>
+          <p className="font-black text-slate-950 dark:text-white">{formatDate(row.date)}</p>
           <p className="mt-1 text-sm font-semibold text-slate-500 dark:text-slate-400">
             {row.product_count ? `${row.product_count} មុខទំនិញ` : row.product_name || "-"}
           </p>
@@ -423,12 +458,8 @@ function DailyMobileCard({ row }) {
 function InfoBox({ label, value }) {
   return (
     <div className="rounded-xl bg-white p-3 dark:bg-slate-900">
-      <p className="text-xs font-black text-slate-500 dark:text-slate-400">
-        {label}
-      </p>
-      <p className="mt-1 break-words font-black text-slate-950 dark:text-white">
-        {value}
-      </p>
+      <p className="text-xs font-black text-slate-500 dark:text-slate-400">{label}</p>
+      <p className="mt-1 break-words font-black text-slate-950 dark:text-white">{value}</p>
     </div>
   );
 }
@@ -436,9 +467,7 @@ function InfoBox({ label, value }) {
 function MoneyBox({ label, value, green, red }) {
   return (
     <div className="border-r border-slate-200 bg-white p-3 last:border-r-0 dark:border-slate-700 dark:bg-slate-900">
-      <p className="text-[11px] font-black text-slate-500 dark:text-slate-400">
-        {label}
-      </p>
+      <p className="text-[11px] font-black text-slate-500 dark:text-slate-400">{label}</p>
       <p
         className={`mt-1 text-sm font-black ${
           green
@@ -462,18 +491,16 @@ function Card({ title, value, note, tone = "green" }) {
 
   return (
     <div className={`rounded-[18px] border p-5 shadow-sm ${toneClass}`}>
-      <p className="text-base font-black text-slate-600 dark:text-slate-300">
-        {title}
-      </p>
+      <p className="text-base font-black text-slate-600 dark:text-slate-300">{title}</p>
       <h3 className="mt-4 break-words text-2xl font-black text-slate-950 dark:text-white md:text-3xl">
         {value}
       </h3>
-      <p className="mt-2 text-sm font-semibold text-slate-500 dark:text-slate-400">
-        {note}
-      </p>
+      <p className="mt-2 text-sm font-semibold text-slate-500 dark:text-slate-400">{note}</p>
     </div>
   );
 }
+
+// ─── Helpers ───────────────────────────────────────────────────────────────────
 
 function aggregateRowsByDate(rows) {
   const map = new Map();
@@ -519,15 +546,9 @@ function sortRowsNewest(rows) {
 }
 
 function getProductKhmerName(product) {
-  const typeMap = {
-    A: "ការ៉ុត",
-    B: "បាកាន",
-    C: "សំបកក្រហមស",
-  };
-
+  const typeMap = { A: "ការ៉ុត", B: "បាកាន", C: "សំបកក្រហមស" };
   const typeName =
     typeMap[String(product?.type || "").toUpperCase()] || product?.type || "-";
-
   return `${typeName} - លេខ ${product?.grade || "-"}`;
 }
 
@@ -565,11 +586,9 @@ function getCurrentWeekValue() {
 
 function getWeekRange(weekValue) {
   if (!weekValue || !weekValue.includes("-W")) return null;
-
   const [yearText, weekText] = weekValue.split("-W");
   const year = Number(yearText);
   const week = Number(weekText);
-
   if (!year || !week) return null;
 
   const simple = new Date(Date.UTC(year, 0, 1 + (week - 1) * 7));
