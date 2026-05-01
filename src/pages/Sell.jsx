@@ -78,7 +78,7 @@ export default function Sell() {
   const [activeType, setActiveType] = useState("A");
   const [activeGrade, setActiveGrade] = useState(1);
 
-  const [customerName, setCustomerName] = useState(WALK_IN_CUSTOMER);
+  const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
   const [suggestions, setSuggestions] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -367,7 +367,7 @@ export default function Sell() {
       const productsRes = await api.get("/products");
       setProducts(productsRes.data);
 
-      setCustomerName(WALK_IN_CUSTOMER);
+      setCustomerName("");
       setCustomerPhone("");
       clearItemFields();
       setPaymentStatus("unpaid");
@@ -556,11 +556,10 @@ export default function Sell() {
                           setActiveType(type);
                           setActiveGrade(1);
                         }}
-                        className={`${optionButtonBase} ${
-                          activeType === type
+                        className={`${optionButtonBase} ${activeType === type
                             ? "border-green-600 bg-green-600 text-white hover:bg-green-700"
                             : "border-slate-200 bg-white text-slate-700 hover:border-green-300 hover:bg-green-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:hover:border-green-700 dark:hover:bg-green-950/30"
-                        }`}
+                          }`}
                       >
                         {TYPE_LABELS[type]}
                       </button>
@@ -578,11 +577,10 @@ export default function Sell() {
                         key={grade}
                         type="button"
                         onClick={() => setActiveGrade(grade)}
-                        className={`${optionButtonBase} ${
-                          activeGrade === grade
+                        className={`${optionButtonBase} ${activeGrade === grade
                             ? "border-green-600 bg-green-600 text-white hover:bg-green-700"
                             : "border-slate-200 bg-white text-slate-700 hover:border-green-300 hover:bg-green-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:hover:border-green-700 dark:hover:bg-green-950/30"
-                        }`}
+                          }`}
                       >
                         លេខ {grade}
                       </button>
@@ -716,22 +714,20 @@ export default function Sell() {
                         setHasDelivery(false);
                         setDeliveryFee("");
                       }}
-                      className={`${fullOptionButtonBase} ${
-                        !hasDelivery
+                      className={`${fullOptionButtonBase} ${!hasDelivery
                           ? "border-green-600 bg-green-600 text-white hover:bg-green-700"
                           : "border-slate-200 bg-white text-slate-700 hover:border-green-300 hover:bg-green-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:hover:border-green-700 dark:hover:bg-green-950/30"
-                      }`}
+                        }`}
                     >
                       មិនមានថ្លៃដឹក
                     </button>
                     <button
                       type="button"
                       onClick={() => setHasDelivery(true)}
-                      className={`${fullOptionButtonBase} ${
-                        hasDelivery
+                      className={`${fullOptionButtonBase} ${hasDelivery
                           ? "border-green-600 bg-green-600 text-white hover:bg-green-700"
                           : "border-slate-200 bg-white text-slate-700 hover:border-green-300 hover:bg-green-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:hover:border-green-700 dark:hover:bg-green-950/30"
-                      }`}
+                        }`}
                     >
                       មានថ្លៃដឹក
                     </button>
@@ -756,33 +752,30 @@ export default function Sell() {
                     <button
                       type="button"
                       onClick={() => selectPaymentStatus("paid")}
-                      className={`${fullOptionButtonBase} ${
-                        paymentStatus === "paid"
+                      className={`${fullOptionButtonBase} ${paymentStatus === "paid"
                           ? "border-green-600 bg-green-600 text-white hover:bg-green-700"
                           : "border-slate-200 bg-white text-slate-700 hover:border-green-300 hover:bg-green-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:hover:border-green-700 dark:hover:bg-green-950/30"
-                      }`}
+                        }`}
                     >
                       បានទូទាត់
                     </button>
                     <button
                       type="button"
                       onClick={() => selectPaymentStatus("debt")}
-                      className={`${fullOptionButtonBase} ${
-                        paymentStatus === "debt"
+                      className={`${fullOptionButtonBase} ${paymentStatus === "debt"
                           ? "border-yellow-600 bg-yellow-500 text-white hover:bg-yellow-600"
                           : "border-slate-200 bg-white text-slate-700 hover:border-yellow-300 hover:bg-yellow-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:hover:border-yellow-700 dark:hover:bg-yellow-950/30"
-                      }`}
+                        }`}
                     >
                       កក់ប្រាក់
                     </button>
                     <button
                       type="button"
                       onClick={() => selectPaymentStatus("unpaid")}
-                      className={`${fullOptionButtonBase} ${
-                        paymentStatus === "unpaid"
+                      className={`${fullOptionButtonBase} ${paymentStatus === "unpaid"
                           ? "border-red-600 bg-red-600 text-white hover:bg-red-700"
                           : "border-slate-200 bg-white text-slate-700 hover:border-red-300 hover:bg-red-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:hover:border-red-700 dark:hover:bg-red-950/30"
-                      }`}
+                        }`}
                     >
                       មិនទាន់ទូទាត់
                     </button>
@@ -812,22 +805,20 @@ export default function Sell() {
                     <button
                       type="button"
                       onClick={() => setPaymentMethod("cash")}
-                      className={`${fullOptionButtonBase} ${
-                        paymentMethod === "cash"
+                      className={`${fullOptionButtonBase} ${paymentMethod === "cash"
                           ? "border-green-600 bg-green-600 text-white hover:bg-green-700"
                           : "border-slate-200 bg-white text-slate-700 hover:border-green-300 hover:bg-green-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:hover:border-green-700 dark:hover:bg-green-950/30"
-                      }`}
+                        }`}
                     >
                       សាច់ប្រាក់
                     </button>
                     <button
                       type="button"
                       onClick={() => setPaymentMethod("qr")}
-                      className={`${fullOptionButtonBase} ${
-                        paymentMethod === "qr"
+                      className={`${fullOptionButtonBase} ${paymentMethod === "qr"
                           ? "border-green-600 bg-green-600 text-white hover:bg-green-700"
                           : "border-slate-200 bg-white text-slate-700 hover:border-green-300 hover:bg-green-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:hover:border-green-700 dark:hover:bg-green-950/30"
-                      }`}
+                        }`}
                     >
                       QR
                     </button>
@@ -1053,13 +1044,12 @@ function Row({ label, value, strong, danger }) {
     <div className="flex justify-between gap-4">
       <span className="text-slate-500 dark:text-slate-400">{label}</span>
       <span
-        className={`text-right font-bold ${
-          danger
+        className={`text-right font-bold ${danger
             ? "text-red-600 dark:text-red-400"
             : strong
               ? "text-green-600 dark:text-green-400"
               : "dark:text-white"
-        }`}
+          }`}
       >
         {value}
       </span>

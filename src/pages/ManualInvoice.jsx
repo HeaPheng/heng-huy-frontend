@@ -1442,7 +1442,11 @@ function ItemsCard({ items, updateItem, addItem, removeItem }) {
     if (items.length > prevLengthRef.current) {
       setTimeout(() => {
         nameRefs.current[items.length - 1]?.focus();
-      }, 50);
+        nameRefs.current[items.length - 1]?.scrollIntoView({
+          behavior: "smooth",
+          block: "center",
+        });
+      }, 80);
     }
 
     prevLengthRef.current = items.length;
