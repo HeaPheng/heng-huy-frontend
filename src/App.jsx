@@ -170,7 +170,7 @@ function DesktopMiniSidebar({ user, darkMode, toggleTheme, setMenuOpen }) {
       <img
         src="/logo.png"
         alt="Heng Huy Logo"
-        className="h-11 w-11 rounded-2xl bg-white object-contain p-1 shadow-sm"
+        className="h-11 w-11 object-contain"
       />
     </aside>
   );
@@ -259,7 +259,7 @@ function Sidebar({
             <img
               src="/logo.png"
               alt="Heng Huy Logo"
-              className="h-11 w-11 rounded-xl bg-white object-contain p-1 shadow-sm"
+              className="h-11 w-11 object-contain"
             />
 
             <div className="min-w-0">
@@ -357,7 +357,7 @@ function MobileTopBar({ setMenuOpen, darkMode, toggleTheme }) {
           <img
             src="/logo.png"
             alt="Heng Huy Logo"
-            className="h-11 w-11 rounded-2xl bg-white object-contain p-1 shadow-sm"
+            className="h-11 w-11 object-contain"
           />
 
           <div>
