@@ -470,7 +470,7 @@ export default function Backup() {
 
   const loadBackups = async () => {
     try {
-      const { data } = await api.get("/api/backups");
+      const { data } = await api.get("/backups");
       setBackups(data);
     } catch (e) {
       console.error("Failed to load backups:", e);
@@ -480,28 +480,28 @@ export default function Backup() {
   useEffect(() => { loadBackups(); }, []);
 
   const createBackup = async () => {
-    await api.post("/api/backup/create");
+    await api.post("/backup/create");
     showToast("success", "Backup created successfully");
     loadBackups();
   };
 
   const restoreBackup = async (name) => {
     if (prompt("Type YES to restore") !== "YES") return;
-    await api.post("/api/backup/restore", { file_name: name });
+    await api.post("/backup/restore", { file_name: name });
     showToast("success", "Restore complete — reloading...");
     setTimeout(() => window.location.reload(), 1200);
   };
 
   const deleteBackup = async (name) => {
     if (prompt("Type DELETE to remove this backup") !== "DELETE") return;
-    await api.delete("/api/backup/delete", { data: { file_name: name } });
+    await api.delete("/backup/delete", { data: { file_name: name } });
     showToast("success", "Backup deleted");
     loadBackups();
   };
 
   const downloadBackup = async (name) => {
     try {
-      const res = await api.get("/api/backup/download", {
+      const res = await api.get("/backup/download", {
         params: { file_name: name },
         responseType: "blob",
       });
