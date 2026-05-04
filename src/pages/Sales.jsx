@@ -1516,42 +1516,86 @@ export default function Sales() {
           className="print:hidden"
           style={styles.modalOverlay}
           onMouseDown={(e) => {
-            if (e.target === e.currentTarget) {
-              setDeleteSale(null);
-            }
+            if (e.target === e.currentTarget) setDeleteSale(null);
           }}
         >
-          <div style={styles.modalSmall}>
-            <h2 style={styles.modalTitle}>លុបវិក្កយបត្រ</h2>
+          <div style={styles.deleteModal}>
+            {/* Red danger header strip */}
+            <div style={styles.deleteModalHeader}>
+              <div style={styles.deleteModalIconWrap}>
+                <span style={{ fontSize: 28 }}>🗑️</span>
+              </div>
+              <div>
+                <h2 style={styles.deleteModalTitle}>លុបវិក្កយបត្រ</h2>
+                <p style={styles.deleteModalHeaderSub}>ការលុបនេះអាចស្ដារបានពី Backup</p>
+              </div>
+            </div>
 
-            <p style={styles.modalSub}>
-              តើអ្នកពិតជាចង់លុប{" "}
-              <strong>{deleteSale.invoice_no}</strong> មែនទេ?
-            </p>
+            {/* Invoice info card */}
+            <div style={styles.deleteInfoCard}>
+              <div style={styles.deleteInfoRow}>
+                <span style={styles.deleteInfoLabel}>🧾 លេខវិក្កយបត្រ</span>
+                <strong style={styles.deleteInfoValue}>{deleteSale.invoice_no}</strong>
+              </div>
+              <div style={styles.deleteInfoRow}>
+                <span style={styles.deleteInfoLabel}>👤 អតិថិជន</span>
+                <span style={styles.deleteInfoValue}>{deleteSale.customer?.name || "—"}</span>
+              </div>
+              <div style={styles.deleteInfoRow}>
+                <span style={styles.deleteInfoLabel}>💰 សរុប</span>
+                <strong style={{ ...styles.deleteInfoValue, color: isDark ? "#fca5a5" : "#dc2626" }}>
+                  {formatRiel(deleteSale.total_amount)}
+                </strong>
+              </div>
+              {normalizePaymentStatus(deleteSale) !== "paid" && (
+                <div style={styles.deleteInfoRow}>
+                  <span style={styles.deleteInfoLabel}>⚠️ នៅជំពាក់</span>
+                  <strong style={{ ...styles.deleteInfoValue, color: isDark ? "#fde68a" : "#d97706" }}>
+                    {formatRiel(getBalanceAmount(deleteSale))}
+                  </strong>
+                </div>
+              )}
+            </div>
 
-            <p style={{ ...styles.logicNote, marginTop: 10 }}>
-              ⚠️ Stock នឹងត្រឡប់វិញ និងប្រាក់ចំណូលនឹងត្រូវដកចេញ
-            </p>
+            {/* What will happen */}
+            <div style={styles.deleteConsequenceBox}>
+              <p style={styles.deleteConsequenceTitle}>📋 អ្វីដែលនឹងកើតឡើង</p>
+              <div style={styles.deleteConsequenceList}>
+                <div style={styles.deleteConsequenceItem}>
+                  <span>✅</span>
+                  <span>Stock នឹងត្រឡប់ស្តុកវិញ</span>
+                </div>
+                <div style={styles.deleteConsequenceItem}>
+                  <span>✅</span>
+                  <span>វិក្កយបត្រអាចស្ដារបានពី Backup</span>
+                </div>
+                <div style={styles.deleteConsequenceItem}>
+                  <span>📉</span>
+                  <span>ប្រាក់ចំណូលត្រូវបានដកចេញ</span>
+                </div>
+                <div style={styles.deleteConsequenceItem}>
+                  <span>🙈</span>
+                  <span>វិក្កយបត្របាត់ពីបញ្ជី (មិនលុបចោលជាអចិន្ត្រៃយ៍)</span>
+                </div>
+              </div>
+            </div>
 
-            <div style={styles.modalActions}>
+            <div style={styles.deleteModalActions}>
               <button
                 type="button"
                 onClick={() => setDeleteSale(null)}
-                style={styles.cancelBtn}
+                disabled={deleting}
+                style={styles.deleteCancelBtn}
               >
                 បោះបង់
               </button>
-
               <button
                 type="button"
                 onClick={confirmDeleteSale}
                 disabled={deleting}
-                style={{
-                  ...styles.saveBtn,
-                  background: "#dc2626",
-                }}
+                style={styles.deleteConfirmBtn}
               >
-                {deleting ? "កំពុងលុប..." : "លុប"}
+                {deleting ? "⏳ កំពុងលុប..." : "🗑️ លុប"}
               </button>
             </div>
           </div>
@@ -2638,5 +2682,138 @@ function getStyles(isDark, isMobile) {
       fontSize: 13,
       whiteSpace: "nowrap",
     },
+
+    // ── Delete confirmation modal (redesigned) ──
+    deleteModal: {
+      width: "min(520px, 100%)",
+      maxHeight: "90vh",
+      overflowY: "auto",
+      borderRadius: 22,
+      background: isDark ? "#0f172a" : "#ffffff",
+      color: isDark ? "#f8fafc" : "#0f172a",
+      border: isDark ? "1.5px solid #7f1d1d" : "1.5px solid #fecaca",
+      boxShadow: isDark
+        ? "0 30px 80px rgba(185,28,28,0.25), 0 10px 30px rgba(0,0,0,0.4)"
+        : "0 30px 80px rgba(185,28,28,0.15), 0 10px 30px rgba(0,0,0,0.1)",
+      overflow: "hidden",
+    },
+    deleteModalHeader: {
+      display: "flex",
+      alignItems: "center",
+      gap: 14,
+      padding: "20px 24px",
+      background: isDark
+        ? "linear-gradient(135deg, #450a0a 0%, #7f1d1d 100%)"
+        : "linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%)",
+      borderBottom: isDark ? "1px solid #7f1d1d" : "1px solid #fecaca",
+    },
+    deleteModalIconWrap: {
+      width: 48,
+      height: 48,
+      borderRadius: 14,
+      background: isDark ? "rgba(220,38,38,0.25)" : "rgba(220,38,38,0.12)",
+      border: isDark ? "1px solid #dc2626" : "1px solid #fca5a5",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      flexShrink: 0,
+    },
+    deleteModalTitle: {
+      margin: 0,
+      fontSize: 20,
+      fontWeight: 900,
+      color: isDark ? "#fca5a5" : "#991b1b",
+    },
+    deleteModalHeaderSub: {
+      margin: "4px 0 0",
+      fontSize: 12,
+      fontWeight: 700,
+      color: isDark ? "#f87171" : "#dc2626",
+      opacity: 0.85,
+    },
+    deleteInfoCard: {
+      margin: "20px 24px 0",
+      borderRadius: 14,
+      border: isDark ? "1px solid #334155" : "1px solid #e2e8f0",
+      background: isDark ? "#020617" : "#f8fafc",
+      overflow: "hidden",
+    },
+    deleteInfoRow: {
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "center",
+      gap: 12,
+      padding: "11px 16px",
+      borderBottom: isDark ? "1px solid #1e293b" : "1px solid #e9eef4",
+    },
+    deleteInfoLabel: {
+      fontSize: 13,
+      fontWeight: 700,
+      color: isDark ? "#94a3b8" : "#64748b",
+      whiteSpace: "nowrap",
+    },
+    deleteInfoValue: {
+      fontSize: 14,
+      fontWeight: 800,
+      color: isDark ? "#e2e8f0" : "#0f172a",
+      textAlign: "right",
+    },
+    deleteConsequenceBox: {
+      margin: "16px 24px 0",
+      borderRadius: 14,
+      border: isDark ? "1px solid #292524" : "1px solid #fed7aa",
+      background: isDark ? "#1c1007" : "#fff7ed",
+      padding: "14px 16px",
+    },
+    deleteConsequenceTitle: {
+      margin: "0 0 10px",
+      fontSize: 13,
+      fontWeight: 900,
+      color: isDark ? "#fdba74" : "#c2410c",
+    },
+    deleteConsequenceList: {
+      display: "flex",
+      flexDirection: "column",
+      gap: 8,
+    },
+    deleteConsequenceItem: {
+      display: "flex",
+      alignItems: "flex-start",
+      gap: 10,
+      fontSize: 13,
+      fontWeight: 700,
+      color: isDark ? "#cbd5e1" : "#374151",
+      lineHeight: "20px",
+    },
+    deleteModalActions: {
+      display: "flex",
+      justifyContent: "flex-end",
+      gap: 10,
+      padding: "20px 24px",
+    },
+    deleteCancelBtn: {
+      border: isDark ? "1px solid #475569" : "1px solid #cbd5e1",
+      borderRadius: 12,
+      padding: "11px 20px",
+      fontSize: 15,
+      fontWeight: 900,
+      cursor: "pointer",
+      background: isDark ? "#1e293b" : "#f8fafc",
+      color: isDark ? "#e2e8f0" : "#334155",
+      transition: "opacity 0.15s",
+    },
+    deleteConfirmBtn: {
+      border: "none",
+      borderRadius: 12,
+      padding: "11px 22px",
+      fontSize: 15,
+      fontWeight: 900,
+      cursor: "pointer",
+      background: "linear-gradient(135deg, #dc2626 0%, #b91c1c 100%)",
+      color: "white",
+      boxShadow: "0 4px 14px rgba(220,38,38,0.4)",
+      transition: "opacity 0.15s, transform 0.1s",
+    },
   };
 }
+
