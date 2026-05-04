@@ -215,6 +215,14 @@ export default function Sales() {
   const [deleteSale, setDeleteSale] = useState(null);
   const [deleting, setDeleting] = useState(false);
 
+  // ---- Deleted invoices (backup/restore) ----
+  const [deletedSales, setDeletedSales] = useState([]);
+  const [showDeleted, setShowDeleted] = useState(false);
+  const [loadingDeleted, setLoadingDeleted] = useState(false);
+  const [restoringId, setRestoringId] = useState(null);
+  const [permanentDeleteId, setPermanentDeleteId] = useState(null);
+  const [permanentDeleting, setPermanentDeleting] = useState(false);
+
   const tableRef = useRef(null);
   const imageInvoiceRef = useRef(null);
 
@@ -272,6 +280,11 @@ export default function Sales() {
     fetchProducts();
   }, []);
 
+  // Auto-load deleted list when the section is opened
+  useEffect(() => {
+    if (showDeleted) fetchDeletedSales();
+  }, [showDeleted]);
+
   useEffect(() => {
     setVisibleCount(INITIAL_VISIBLE_COUNT);
     setSelectedSaleIds([]);
@@ -285,6 +298,54 @@ export default function Sales() {
   async function fetchProducts() {
     const res = await api.get("/products");
     setProducts(Array.isArray(res.data) ? res.data : res.data.data || []);
+  }
+
+  async function fetchDeletedSales() {
+    setLoadingDeleted(true);
+    try {
+      const res = await api.get("/sales/deleted");
+      setDeletedSales(Array.isArray(res.data) ? res.data : res.data.data || []);
+    } catch (err) {
+      console.error("fetchDeletedSales error:", err);
+      setDeletedSales([]);
+    } finally {
+      setLoadingDeleted(false);
+    }
+  }
+
+  async function restoreDeletedSale(id) {
+    setRestoringId(id);
+    try {
+      const res = await api.post(`/sales/${id}/restore`);
+      // Add restored sale back to active list
+      const restored = res.data?.sale || res.data;
+      if (restored?.id) {
+        setSales((prev) => [restored, ...prev]);
+      } else {
+        await fetchSales();
+      }
+      setDeletedSales((prev) => prev.filter((s) => s.id !== id));
+    } catch (err) {
+      console.error("restoreDeletedSale error:", err);
+      alert("មិនអាចស្ដារវិក្កយបត្របានទេ។ សូមពិនិត្យ backend route POST /sales/{id}/restore");
+    } finally {
+      setRestoringId(null);
+    }
+  }
+
+  async function confirmPermanentDelete() {
+    if (!permanentDeleteId) return;
+    setPermanentDeleting(true);
+    try {
+      await api.delete(`/sales/${permanentDeleteId}/force`);
+      setDeletedSales((prev) => prev.filter((s) => s.id !== permanentDeleteId));
+      setPermanentDeleteId(null);
+    } catch (err) {
+      console.error("permanentDelete error:", err);
+      alert("មិនអាចលុបចោលជាអចិន្ត្រៃយ៍បានទេ។ សូមពិនិត្យ backend route DELETE /sales/{id}/force");
+    } finally {
+      setPermanentDeleting(false);
+    }
   }
   async function confirmDeleteSale() {
     if (!deleteSale) return;
@@ -988,6 +1049,96 @@ export default function Sales() {
               )}
             </div>
           )}
+
+          {/* ── Deleted Invoices Backup Section ── */}
+          <div style={styles.deletedSection}>
+            <button
+              type="button"
+              onClick={() => setShowDeleted((v) => !v)}
+              style={styles.deletedToggleBtn}
+            >
+              <span style={styles.deletedToggleIcon}>
+                {showDeleted ? "🗂️" : "🗃️"}
+              </span>
+              <span>ប្រអប់ Backup — វិក្កយបត្រដែលបានលុប</span>
+              <span style={styles.deletedBadge}>
+                {showDeleted && !loadingDeleted ? deletedSales.length : ""}
+              </span>
+              <span style={{
+                marginLeft: "auto",
+                fontSize: 13,
+                opacity: 0.6,
+              }}>
+                {showDeleted ? "▲ បិទ" : "▼ បើក"}
+              </span>
+            </button>
+
+            {showDeleted && (
+              <div style={styles.deletedBody}>
+                <div style={styles.deletedHeader}>
+                  <div>
+                    <h3 style={styles.deletedTitle}>🗑️ វិក្កយបត្រដែលបានលុប</h3>
+                    <p style={styles.deletedSubtitle}>
+                      អ្នកអាចស្ដារវិក្កយបត្រដែលបានលុបដោយចៃដន្យ ដោយចុច «ស្ដារ»
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={fetchDeletedSales}
+                    disabled={loadingDeleted}
+                    style={styles.deletedRefreshBtn}
+                  >
+                    {loadingDeleted ? "⏳ កំពុងទាញ..." : "🔄 ទាញថ្មី"}
+                  </button>
+                </div>
+
+                {loadingDeleted ? (
+                  <div style={styles.deletedLoading}>⏳ កំពុងទាញទិន្នន័យ...</div>
+                ) : deletedSales.length === 0 ? (
+                  <div style={styles.deletedEmpty}>
+                    ✅ មិនមានវិក្កយបត្រដែលបានលុបនៅក្នុង Backup
+                  </div>
+                ) : (
+                  <div style={styles.deletedList}>
+                    {deletedSales.map((sale) => (
+                      <div key={sale.id} style={styles.deletedRow}>
+                        <div style={styles.deletedRowLeft}>
+                          <div style={styles.deletedInvoiceNo}>
+                            🧾 {sale.invoice_no || `#${sale.id}`}
+                          </div>
+                          <div style={styles.deletedMeta}>
+                            <span>👤 {sale.customer?.name || "—"}</span>
+                            <span>📞 {sale.customer?.phone || "—"}</span>
+                            <span>💰 {formatRiel(sale.total_amount)}</span>
+                            <span style={styles.deletedDate}>
+                              🗑️ {formatDateTime(sale.deleted_at || sale.updated_at)}
+                            </span>
+                          </div>
+                        </div>
+                        <div style={styles.deletedRowActions}>
+                          <button
+                            type="button"
+                            onClick={() => restoreDeletedSale(sale.id)}
+                            disabled={restoringId === sale.id}
+                            style={styles.restoreBtn}
+                          >
+                            {restoringId === sale.id ? "⏳ ..." : "♻️ ស្ដារ"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setPermanentDeleteId(sale.id)}
+                            style={styles.forceDeleteBtn}
+                          >
+                            🗑️ លុបចោល
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       </main>
 
@@ -1401,6 +1552,44 @@ export default function Sales() {
                 }}
               >
                 {deleting ? "កំពុងលុប..." : "លុប"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Permanent Delete Confirmation Modal ── */}
+      {permanentDeleteId && (
+        <div
+          className="print:hidden"
+          style={styles.modalOverlay}
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) setPermanentDeleteId(null);
+          }}
+        >
+          <div style={styles.modalSmall}>
+            <h2 style={styles.modalTitle}>⚠️ លុបចោលជាអចិន្ត្រៃយ៍</h2>
+            <p style={{ ...styles.modalSub, marginTop: 12 }}>
+              វិក្កយបត្រនេះនឹង<strong> លុបចោលជាអចិន្ត្រៃយ៍ </strong>ហើយមិនអាចស្ដារបានទៀតទេ!
+            </p>
+            <p style={{ ...styles.logicNote, marginTop: 10 }}>
+              ⚠️ សូមប្រាកដថាអ្នកពិតជាចង់លុប មុននឹងបន្ត
+            </p>
+            <div style={styles.modalActions}>
+              <button
+                type="button"
+                onClick={() => setPermanentDeleteId(null)}
+                style={styles.cancelBtn}
+              >
+                បោះបង់
+              </button>
+              <button
+                type="button"
+                onClick={confirmPermanentDelete}
+                disabled={permanentDeleting}
+                style={{ ...styles.saveBtn, background: "#7f1d1d" }}
+              >
+                {permanentDeleting ? "កំពុងលុប..." : "✅ លុបចោលជាអចិន្ត្រៃយ៍"}
               </button>
             </div>
           </div>
@@ -2287,6 +2476,166 @@ function getStyles(isDark, isMobile) {
       padding: "9px 14px",
       fontWeight: 900,
       cursor: "pointer",
+      whiteSpace: "nowrap",
+    },
+
+    // ── Deleted / Backup section styles ──
+    deletedSection: {
+      marginTop: 32,
+    },
+    deletedToggleBtn: {
+      width: "100%",
+      display: "flex",
+      alignItems: "center",
+      gap: 10,
+      padding: "14px 20px",
+      borderRadius: 16,
+      border: isDark ? "1.5px dashed #475569" : "1.5px dashed #94a3b8",
+      background: isDark ? "#0f172a" : "#fafafa",
+      color: isDark ? "#cbd5e1" : "#334155",
+      fontSize: 15,
+      fontWeight: 900,
+      cursor: "pointer",
+      textAlign: "left",
+      transition: "background 0.15s ease, border-color 0.15s ease",
+    },
+    deletedToggleIcon: {
+      fontSize: 20,
+    },
+    deletedBadge: {
+      minWidth: 22,
+      height: 22,
+      borderRadius: 999,
+      background: "#dc2626",
+      color: "white",
+      fontSize: 12,
+      fontWeight: 900,
+      display: "inline-flex",
+      alignItems: "center",
+      justifyContent: "center",
+      padding: "0 6px",
+    },
+    deletedBody: {
+      marginTop: 12,
+      borderRadius: 18,
+      border: isDark ? "1px solid #334155" : "1px solid #e2e8f0",
+      background: isDark ? "#0f172a" : "#ffffff",
+      overflow: "hidden",
+      boxShadow: isDark
+        ? "0 8px 24px rgba(0,0,0,0.28)"
+        : "0 8px 24px rgba(15,23,42,0.06)",
+    },
+    deletedHeader: {
+      display: "flex",
+      alignItems: "flex-start",
+      justifyContent: "space-between",
+      gap: 14,
+      flexWrap: "wrap",
+      padding: "20px 22px 14px",
+      borderBottom: isDark ? "1px solid #1e293b" : "1px solid #e2e8f0",
+      background: isDark ? "#111827" : "#fef2f2",
+    },
+    deletedTitle: {
+      margin: 0,
+      fontSize: 20,
+      fontWeight: 900,
+      color: isDark ? "#fecaca" : "#991b1b",
+    },
+    deletedSubtitle: {
+      margin: "6px 0 0",
+      fontSize: 13,
+      fontWeight: 700,
+      color: isDark ? "#94a3b8" : "#64748b",
+    },
+    deletedRefreshBtn: {
+      border: isDark ? "1px solid #475569" : "1px solid #cbd5e1",
+      borderRadius: 10,
+      padding: "9px 14px",
+      fontSize: 13,
+      fontWeight: 900,
+      cursor: "pointer",
+      background: isDark ? "#1e293b" : "#f8fafc",
+      color: isDark ? "#e2e8f0" : "#334155",
+      whiteSpace: "nowrap",
+      flexShrink: 0,
+    },
+    deletedLoading: {
+      padding: 28,
+      textAlign: "center",
+      fontWeight: 800,
+      color: isDark ? "#94a3b8" : "#64748b",
+    },
+    deletedEmpty: {
+      padding: 28,
+      textAlign: "center",
+      fontWeight: 900,
+      color: isDark ? "#4ade80" : "#15803d",
+      fontSize: 15,
+    },
+    deletedList: {
+      display: "flex",
+      flexDirection: "column",
+      gap: 0,
+    },
+    deletedRow: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: 14,
+      flexWrap: "wrap",
+      padding: "14px 22px",
+      borderBottom: isDark ? "1px solid #1e293b" : "1px solid #f1f5f9",
+      transition: "background 0.15s ease",
+    },
+    deletedRowLeft: {
+      display: "flex",
+      flexDirection: "column",
+      gap: 6,
+      minWidth: 0,
+      flex: 1,
+    },
+    deletedInvoiceNo: {
+      fontSize: 15,
+      fontWeight: 950,
+      color: isDark ? "#fca5a5" : "#b91c1c",
+    },
+    deletedMeta: {
+      display: "flex",
+      flexWrap: "wrap",
+      gap: "4px 14px",
+      fontSize: 13,
+      fontWeight: 700,
+      color: isDark ? "#94a3b8" : "#64748b",
+    },
+    deletedDate: {
+      color: isDark ? "#f87171" : "#dc2626",
+      fontWeight: 800,
+    },
+    deletedRowActions: {
+      display: "flex",
+      gap: 8,
+      flexShrink: 0,
+    },
+    restoreBtn: {
+      background: isDark ? "#14532d" : "#dcfce7",
+      color: isDark ? "#bbf7d0" : "#15803d",
+      border: isDark ? "1px solid #16a34a" : "1px solid #86efac",
+      borderRadius: 10,
+      padding: "9px 16px",
+      fontWeight: 900,
+      cursor: "pointer",
+      fontSize: 13,
+      whiteSpace: "nowrap",
+    },
+    forceDeleteBtn: {
+      background: isDark ? "#450a0a" : "#fee2e2",
+      color: isDark ? "#fca5a5" : "#b91c1c",
+      border: isDark ? "1px solid #b91c1c" : "1px solid #fca5a5",
+      borderRadius: 10,
+      padding: "9px 16px",
+      fontWeight: 900,
+      cursor: "pointer",
+      fontSize: 13,
       whiteSpace: "nowrap",
     },
   };
