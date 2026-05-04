@@ -16,6 +16,7 @@ import ManualInvoice from "./pages/ManualInvoice";
 import Login from "./pages/Login";
 import Tasks from "./pages/Tasks";
 import Backup from "./pages/Backup"
+import Staff from "./pages/Staff"
 import api from "./api";
 
 export default function App() {
@@ -114,6 +115,7 @@ export default function App() {
           <Route path="/statements" element={<ProtectedRoute isLoggedIn={isLoggedIn} allowRoles={["admin"]}><Statements /></ProtectedRoute>} />
           <Route path="/tasks" element={<ProtectedRoute isLoggedIn={isLoggedIn} allowRoles={["admin"]}><Tasks /></ProtectedRoute>} />
           <Route path="/backup" element={<ProtectedRoute isLoggedIn={isLoggedIn} allowRoles={["admin"]}><Backup /></ProtectedRoute>} />
+          <Route path="/staff" element={<ProtectedRoute isLoggedIn={isLoggedIn} allowRoles={["admin"]}><Staff /></ProtectedRoute>} />
         </Routes>
       </main>
     </div>
@@ -156,6 +158,7 @@ function DesktopMiniSidebar({ user, darkMode, toggleTheme, setMenuOpen }) {
             <MiniLink to="/sales" icon="📄" label="វិក្កយបត្រទាំងអស់" />
             <MiniLink to="/daily-history" icon="📅" label="ប្រចាំថ្ងៃ" />
             <MiniLink to="/statements" icon="📑" label="របាយការណ៍" />
+            <MiniLink to="/staff" icon="👥" label="ប្រាក់ខែបុគ្គលិក" />
             <MiniLink to="/tasks" icon="✅" label="កំណត់ចំណាំ" />
             <MiniLink to="/backup" icon="🔄" label="backup" />
           </>
@@ -308,6 +311,10 @@ function Sidebar({
 
                   <DrawerLink to="/statements" icon="📑" close={() => setMenuOpen(false)}>
                     បង្កើតរបាយការណ៍
+                  </DrawerLink>
+
+                  <DrawerLink to="/staff" icon="👥" close={() => setMenuOpen(false)}>
+                    ប្រាក់ខែបុគ្គលិក
                   </DrawerLink>
 
                   <DrawerLink to="/tasks" icon="✅" close={() => setMenuOpen(false)}>
