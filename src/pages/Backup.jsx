@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import api from "../api";
 
 const styles = `
   @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&display=swap');
@@ -466,16 +467,10 @@ export default function Backup() {
   };
 
   const token = localStorage.getItem("pos_token");
-  const authHeaders = {
-    "Authorization": `Bearer ${token}`,
-    "Content-Type": "application/json",
-  };
 
   const loadBackups = async () => {
     try {
-      const res  = await fetch("/api/backups", { headers: authHeaders });
-      if (!res.ok) throw new Error("Server error");
-      const data = await res.json();
+      const { data } = await api.get("/api/backups");
       setBackups(data);
     } catch (e) {
       console.error("Failed to load backups:", e);
@@ -485,55 +480,33 @@ export default function Backup() {
   useEffect(() => { loadBackups(); }, []);
 
   const createBackup = async () => {
-    await fetch("/api/backup/create", { method: "POST", headers: authHeaders });
+    await api.post("/api/backup/create");
     showToast("success", "Backup created successfully");
     loadBackups();
   };
 
   const restoreBackup = async (name) => {
     if (prompt("Type YES to restore") !== "YES") return;
-    await fetch("/api/backup/restore", {
-      method: "POST", headers: authHeaders,
-      body: JSON.stringify({ file_name: name }),
-    });
+    await api.post("/api/backup/restore", { file_name: name });
     showToast("success", "Restore complete — reloading...");
     setTimeout(() => window.location.reload(), 1200);
   };
 
   const deleteBackup = async (name) => {
     if (prompt("Type DELETE to remove this backup") !== "DELETE") return;
-    await fetch("/api/backup/delete", {
-      method: "DELETE", headers: authHeaders,
-      body: JSON.stringify({ file_name: name }),
-    });
+    await api.delete("/api/backup/delete", { data: { file_name: name } });
     showToast("success", "Backup deleted");
     loadBackups();
   };
 
   const downloadBackup = async (name) => {
     try {
-      const res = await fetch(`/api/backup/download?file_name=${encodeURIComponent(name)}`, {
-        headers: authHeaders,
+      const res = await api.get("/api/backup/download", {
+        params: { file_name: name },
+        responseType: "blob",
       });
 
-      if (!res.ok) {
-        // Try to read the error message from the server if it's JSON
-        const contentType = res.headers.get("content-type") || "";
-        if (contentType.includes("application/json")) {
-          const err = await res.json();
-          throw new Error(err.message || err.detail || `Server returned ${res.status}`);
-        }
-        throw new Error(`Server returned ${res.status}`);
-      }
-
-      // Make sure we actually got a file back, not an error page
-      const contentType = res.headers.get("content-type") || "";
-      if (contentType.includes("application/json")) {
-        const err = await res.json();
-        throw new Error(err.message || err.detail || "Unexpected JSON response");
-      }
-
-      const blob = await res.blob();
+      const blob = res.data;
       const url  = URL.createObjectURL(blob);
       const a    = document.createElement("a");
       a.href = url;
@@ -543,13 +516,7 @@ export default function Backup() {
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
     } catch (e) {
-      // Fallback: open the download URL directly in a new tab
-      // This works if the backend serves the file via a plain GET with auth in the URL
-      const fallbackUrl = `/api/backup/download?file_name=${encodeURIComponent(name)}&token=${token}`;
-      const tryTab = window.open(fallbackUrl, "_blank");
-      if (!tryTab) {
-        showToast("error", `Download failed: ${e.message}`);
-      }
+      showToast("error", `Download failed: ${e.message}`);
     }
   };
 
