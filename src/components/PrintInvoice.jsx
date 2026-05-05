@@ -15,11 +15,11 @@ const SHOP_ADDRESS =
   "អាសយដ្ឋាន: ផ្ទះ 28BE1 ផ្លូវ 223, ភូមិ 12 សង្កាត់ផ្សារដើមគរ ខណ្ឌទួលគោក, រាជធានីភ្នំពេញ";
 
 const COL_WIDTHS = {
-  no: "7%",
-  name: "31%",
-  qty: "17%",
-  unitPrice: "21%",
-  amount: "24%",
+  no: "6%",
+  name: "38%",
+  qty: "16%",
+  unitPrice: "18%",
+  amount: "22%",
 };
 
 function formatKg(kg) {
@@ -39,8 +39,11 @@ function productKhmer(product) {
 
 function itemProductKhmer(item) {
   if (item?.is_delivery_fee) return "ថ្លៃដឹកជញ្ជូន";
-  if (item?.name) return item.name;
-  return productKhmer(item?.product || item);
+  let name = item?.name || productKhmer(item?.product || item);
+  if (item?.custom_label) {
+    name += ` ${item.custom_label}x3%`;
+  }
+  return name;
 }
 
 function formatInvoiceDateTime(value) {
@@ -142,11 +145,11 @@ const PrintInvoice = forwardRef(function PrintInvoice({ invoice, captureMode = f
 
   const paperWidth = isImageCapture ? "794px" : "210mm";
   const paperHeight = isImageCapture ? "1123px" : "297mm";
-  const paperPadding = isImageCapture ? "38px 53px" : "10mm 14mm";
-  const imageSize = "180px";
-  const headerGrid = "180px 1fr 180px";
+  const paperPadding = isImageCapture ? "38px 53px" : "8mm 14mm";
+  const imageSize = isImageCapture ? "180px" : "155px";
+  const headerGrid = isImageCapture ? "180px 1fr 180px" : "155px 1fr 155px";
   const topInfoGrid = isImageCapture ? "1fr 219px" : "1fr 58mm";
-  const qrSize = "155px";
+  const qrSize = isImageCapture ? "155px" : "125px";
 
   const tableHeaderHeight = isImageCapture ? "54px" : "45px";
   const tableRowHeight = isImageCapture ? "41px" : "33px";
@@ -172,9 +175,21 @@ const PrintInvoice = forwardRef(function PrintInvoice({ invoice, captureMode = f
       : []),
   ];
 
-  const rows = Array.from({ length: 10 }).map((_, index) => {
+  // Dynamic rows: default 10, expand if more items (max 18 to stay on one page)
+  const MIN_ROWS = 10;
+  const MAX_ROWS = 18;
+  const rowCount = Math.min(Math.max(invoiceItems.length, MIN_ROWS), MAX_ROWS);
+
+  const rows = Array.from({ length: rowCount }).map((_, index) => {
     return invoiceItems?.[index] || { id: `empty-${index}`, empty: true };
   });
+
+  // Adjust row height dynamically so everything fits on one page
+  const dynamicRowHeight = rowCount <= 10
+    ? (isImageCapture ? "41px" : "33px")
+    : rowCount <= 14
+      ? (isImageCapture ? "32px" : "26px")
+      : (isImageCapture ? "26px" : "21px");
 
   const borderStyle = {
     border: `1px solid ${INVOICE_BLUE}`,
@@ -197,7 +212,6 @@ const PrintInvoice = forwardRef(function PrintInvoice({ invoice, captureMode = f
     fontWeight: 900,
     fontSize: tableFontSize,
     lineHeight: tableLineHeight,
-    height: tableRowHeight,
   };
 
   const summaryCell = {
@@ -540,37 +554,133 @@ const PrintInvoice = forwardRef(function PrintInvoice({ invoice, captureMode = f
           </thead>
 
           <tbody>
-            {rows.map((item, index) => (
-              <tr key={item.id || index} style={{ height: tableRowHeight }}>
-                <td style={{ ...bodyCellBase, padding: 0 }}>
-                  <div style={tableTextCenter}>{index + 1}</div>
-                </td>
+            {rows.map((item, index) => {
+              const rowspan = item._rowspan || 1;
+              
+              // Single-item groups with a date need a taller row to fit both lines
+              let rowH = dynamicRowHeight;
+              if (!item.empty && item._isGroupFirst && rowspan === 1 && item._dateTag) {
+                rowH = isImageCapture ? "54px" : "44px";
+              }
 
-                <td style={{ ...bodyCellBase, fontSize: productFontSize }}>
-                  <div style={tableTextLeft}>
-                    {item.empty ? "" : itemProductKhmer(item)}
-                  </div>
-                </td>
+              return (
+                <tr key={item.id || index} style={{ height: rowH }}>
 
-                <td style={{ ...bodyCellBase, padding: "0 6px" }}>
-                  <div style={tableTextCenter}>
-                    {item.empty || item.is_delivery_fee ? "" : formatKg(item.quantity_kg)}
-                  </div>
-                </td>
+                  {/* No. and Name columns — only rendered by the FIRST item of a group */}
+                  {!item._skipNameCell && (
+                    <>
+                      {/* No. */}
+                      <td
+                        rowSpan={rowspan}
+                        style={{ ...bodyCellBase, padding: 0, verticalAlign: "middle" }}
+                      >
+                        <div style={tableTextCenter}>
+                          {item.empty ? "" : item._groupNo ?? (index + 1)}
+                        </div>
+                      </td>
 
-                <td style={{ ...bodyCellBase }}>
-                  <div style={tableTextRight}>
-                    {item.empty || item.is_delivery_fee ? "" : formatRiel(item.price_per_kg)}
-                  </div>
-                </td>
+                      {/* Name — rowspan cell with all product names + date centered */}
+                      <td
+                        rowSpan={rowspan}
+                        style={{
+                          ...bodyCellBase,
+                          fontSize: productFontSize,
+                          verticalAlign: "middle",
+                          padding: "5px 9px",
+                        }}
+                      >
+                        {item.empty ? null : item._groupNames ? (
+                          // Multi-item group: list names with date centered between them
+                          (() => {
+                            const elements = item._groupNames.map((name, i) => (
+                              <div key={`name-${i}`} style={{ textAlign: "left", lineHeight: "1.3", fontWeight: 900 }}>
+                                {name}
+                              </div>
+                            ));
+                            
+                            if (item._dateTag) {
+                              const dateEl = (
+                                <div key="date" style={{
+                                  textAlign: "center",
+                                  fontSize: isImageCapture ? "16px" : "14px",
+                                  fontWeight: 900,
+                                  color: INVOICE_BLUE,
+                                  opacity: 1,
+                                  lineHeight: "1.4",
+                                  paddingTop: "2px",
+                                }}>
+                                  ({item._dateTag})
+                                </div>
+                              );
+                              // Insert the date element at the end of the items
+                              elements.push(dateEl);
+                            }
 
-                <td style={{ ...bodyCellBase }}>
-                  <div style={tableTextRight}>
-                    {item.empty ? "" : formatRiel(item.subtotal)}
-                  </div>
-                </td>
-              </tr>
-            ))}
+                            return (
+                              <div style={{
+                                display: "flex",
+                                flexDirection: "column",
+                                justifyContent: "space-evenly",
+                                height: "100%",
+                                minHeight: `calc(${dynamicRowHeight} * ${rowspan} - 10px)`,
+                                transform: `translateY(${textLift})`,
+                              }}>
+                                {elements}
+                              </div>
+                            );
+                          })()
+                        ) : (
+                          // Single item: product name + date below
+                          <div style={{
+                            display: "flex",
+                            flexDirection: "column",
+                            justifyContent: "center",
+                            transform: `translateY(${textLift})`,
+                          }}>
+                            <div style={{ textAlign: "left", lineHeight: "1.3" }}>{itemProductKhmer(item)}</div>
+                            {item._dateTag && (
+                              <div style={{
+                                textAlign: "center",
+                                fontSize: isImageCapture ? "16px" : "14px",
+                                fontWeight: 900,
+                                color: INVOICE_BLUE,
+                                opacity: 1,
+                                lineHeight: "1.4",
+                                marginTop: "3px",
+                              }}>
+                                ({item._dateTag})
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </td>
+                    </>
+                  )}
+
+                  {/* Quantity — each item has its own cell */}
+                  <td style={{ ...bodyCellBase, padding: "0 6px" }}>
+                    <div style={tableTextCenter}>
+                      {item.empty || item.is_delivery_fee ? "" : formatKg(item.quantity_kg)}
+                    </div>
+                  </td>
+
+                  {/* Unit Price */}
+                  <td style={{ ...bodyCellBase }}>
+                    <div style={tableTextRight}>
+                      {item.empty || item.is_delivery_fee ? "" : formatRiel(item.price_per_kg)}
+                    </div>
+                  </td>
+
+                  {/* Amount */}
+                  <td style={{ ...bodyCellBase }}>
+                    <div style={tableTextRight}>
+                      {item.empty ? "" : formatRiel(item.subtotal)}
+                    </div>
+                  </td>
+
+                </tr>
+              );
+            })}
           </tbody>
         </table>
 

@@ -155,6 +155,9 @@ export default function DailySalesHistory() {
         acc.totalSold += Number(row.sold_kg || 0);
         acc.totalAdded += Number(row.added_kg || 0);
         acc.totalMoney += Number(row.money_amount || 0);
+        acc.totalPaid += Number(row.paid_amount || 0);
+        acc.totalBalance += Number(row.balance_amount || 0);
+        acc.totalSaleAmount += Number(row.total_amount || 0);
         acc.totalInvoices += Number(row.invoice_count || 0);
         acc.totalOpening += Number(row.first_stock_kg || 0);
         acc.totalClosing += Number(row.last_stock_kg || 0);
@@ -164,6 +167,9 @@ export default function DailySalesHistory() {
         totalSold: 0,
         totalAdded: 0,
         totalMoney: 0,
+        totalPaid: 0,
+        totalBalance: 0,
+        totalSaleAmount: 0,
         totalInvoices: 0,
         totalOpening: 0,
         totalClosing: 0,
@@ -265,9 +271,11 @@ export default function DailySalesHistory() {
         />
 
         <Card
-          title="ចំនួនប្រាក់"
+          title="ចំណូលលក់ថ្ងៃនេះ"
           value={formatRiel(summary.totalMoney)}
-          note="ប្រាក់លក់សរុបតាមថ្ងៃដែលបង្ហាញ"
+          note={
+            `បានទូទាត់ ${formatRiel(summary.totalPaid)} | នៅជំពាក់ ${formatRiel(summary.totalBalance)} | លក់សរុប ${formatRiel(summary.totalSaleAmount)}`
+          }
         />
 
         <Card

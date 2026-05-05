@@ -92,6 +92,7 @@ export default function Sell() {
   const [saleDate, setSaleDate] = useState(today());
   const [hasDelivery, setHasDelivery] = useState(false);
   const [deliveryFee, setDeliveryFee] = useState("");
+  const [customBoxValue, setCustomBoxValue] = useState("");
 
   const [cartItems, setCartItems] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -202,6 +203,7 @@ export default function Sell() {
       quantity_kg: quantityKg,
       price_per_kg: price,
       subtotal: currentSubtotal,
+      customBoxValue,
     };
   }
 
@@ -209,6 +211,7 @@ export default function Sell() {
     setQuantity("");
     setUnit("kg");
     setPricePerKg("");
+    setCustomBoxValue("");
   }
 
   function addItemToCart() {
@@ -354,6 +357,7 @@ export default function Sell() {
           quantity: item.quantity,
           unit: item.unit,
           price_per_kg: item.price_per_kg,
+          custom_label: item.customBoxValue,
         })),
       });
 
@@ -586,6 +590,32 @@ export default function Sell() {
                       </button>
                     ))}
                   </div>
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
+                    ចំនួនកាត់ ៣%
+                  </label>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={customBoxValue}
+                    onChange={(e) => {
+                      const val = parseDecimalInput(e.target.value);
+                      setCustomBoxValue(val);
+                      if (val) {
+                        const num = Number(val);
+                        const result = num - (num * 0.03);
+                        setQuantity(result.toString());
+                      } else {
+                        setQuantity("");
+                      }
+                    }}
+                    onKeyDown={preventNumberControl}
+                    onWheel={(e) => e.currentTarget.blur()}
+                    placeholder="0"
+                    className="sell-no-spinner w-full rounded-xl border border-slate-200 dark:border-slate-700 dark:bg-slate-950 dark:text-white dark:placeholder:text-slate-500 px-4 py-3 outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100"
+                  />
                 </div>
 
                 <div>
@@ -873,6 +903,7 @@ export default function Sell() {
                         <div>
                           <p className="font-bold dark:text-white">
                             {productKhmer(item.product)}
+                            {item.customBoxValue ? ` ${item.customBoxValue}x3%` : ""}
                           </p>
                           <p className="text-xs text-slate-500 dark:text-slate-400">
                             {formatKg(item.quantity_kg)} ×{" "}
@@ -897,6 +928,7 @@ export default function Sell() {
                     <div className="mb-3 rounded-xl border border-green-100 dark:border-green-800/60 bg-green-50 dark:bg-green-950/30 p-3">
                       <p className="font-bold dark:text-white">
                         {productKhmer(selectedProduct)}
+                        {customBoxValue ? ` ${customBoxValue}x3%` : ""}
                       </p>
                       <p className="text-xs text-slate-500 dark:text-slate-400">
                         {formatKg(quantityKg)} × {formatRiel(price)}

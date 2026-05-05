@@ -146,11 +146,11 @@ export default function Tasks() {
         return sales
             .filter((sale) => {
                 const balance = Number(sale.balance_amount || 0);
-                return (
-                    balance > 0 ||
-                    sale.payment_status === "debt" ||
-                    sale.payment_status === "unpaid"
-                );
+                const status = sale.payment_status || "";
+                // Exclude fully paid invoices
+                if (status === "paid" || status === "completed") return false;
+                if (balance <= 0) return false;
+                return true;
             })
             .filter((sale) => {
                 if (!q) return true;
@@ -528,6 +528,8 @@ function TaskListPanel({ loading, tab, tasks, toggleTask, setDeleteTarget }) {
     );
 }
 
+const DEBT_PAGE_SIZE = 10;
+
 function DebtSection({
     salesLoading,
     debtSales,
@@ -539,6 +541,17 @@ function DebtSection({
     setDeleteTarget,
     hasDebtReminder,
 }) {
+    const [visibleCount, setVisibleCount] = useState(DEBT_PAGE_SIZE);
+
+    // Reset pagination when search changes
+    useEffect(() => {
+        setVisibleCount(DEBT_PAGE_SIZE);
+    }, [search]);
+
+    const visibleSales = debtSales.slice(0, visibleCount);
+    const hasMore = debtSales.length > visibleCount;
+    const remaining = debtSales.length - visibleCount;
+
     return (
         <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
             <section className="rounded-3xl border border-slate-800 bg-slate-900/80 shadow-xl">
@@ -572,16 +585,40 @@ function DebtSection({
                 ) : debtSales.length === 0 ? (
                     <EmptyState text="មិនមានវិក្កយបត្រជំពាក់" />
                 ) : (
-                    <div className="divide-y divide-slate-800">
-                        {debtSales.map((sale) => (
-                            <DebtInvoiceCard
-                                key={sale.id}
-                                sale={sale}
-                                hasReminder={hasDebtReminder(sale)}
-                                onCreateReminder={() => openDebtModal(sale)}
-                            />
-                        ))}
-                    </div>
+                    <>
+                        <div className="divide-y divide-slate-800">
+                            {visibleSales.map((sale) => (
+                                <DebtInvoiceCard
+                                    key={sale.id}
+                                    sale={sale}
+                                    hasReminder={hasDebtReminder(sale)}
+                                    onCreateReminder={() => openDebtModal(sale)}
+                                />
+                            ))}
+                        </div>
+
+                        {hasMore && (
+                            <div className="border-t border-slate-800 p-4">
+                                <button
+                                    onClick={() => setVisibleCount((c) => c + DEBT_PAGE_SIZE)}
+                                    className="w-full rounded-2xl bg-slate-800 px-4 py-3 text-sm font-black text-slate-200 hover:bg-slate-700 active:scale-[0.98]"
+                                >
+                                    បង្ហាញបន្ថែម ({remaining} វិក្កយបត្រទៀត)
+                                </button>
+                            </div>
+                        )}
+
+                        {!hasMore && debtSales.length > DEBT_PAGE_SIZE && (
+                            <div className="border-t border-slate-800 p-4">
+                                <button
+                                    onClick={() => setVisibleCount(DEBT_PAGE_SIZE)}
+                                    className="w-full rounded-2xl bg-slate-800 px-4 py-3 text-sm font-black text-slate-400 hover:bg-slate-700 active:scale-[0.98]"
+                                >
+                                    បង្រួម
+                                </button>
+                            </div>
+                        )}
+                    </>
                 )}
             </section>
 
@@ -593,21 +630,24 @@ function DebtSection({
                     </p>
                 </div>
 
-                {debtTasks.length === 0 ? (
-                    <EmptyState text="មិនទាន់មានរំលឹកបំណុល" />
-                ) : (
-                    <div className="divide-y divide-slate-800">
-                        {debtTasks.map((task) => (
-                            <TaskCard
-                                key={task.id}
-                                task={task}
-                                showCheckbox
-                                onToggle={() => toggleTask(task)}
-                                onDelete={() => setDeleteTarget(task)}
-                            />
-                        ))}
-                    </div>
-                )}
+                {(() => {
+                    const pendingDebtTasks = debtTasks.filter((t) => t.status !== "done");
+                    return pendingDebtTasks.length === 0 ? (
+                        <EmptyState text="មិនទាន់មានរំលឹកបំណុល" />
+                    ) : (
+                        <div className="divide-y divide-slate-800">
+                            {pendingDebtTasks.map((task) => (
+                                <TaskCard
+                                    key={task.id}
+                                    task={task}
+                                    showCheckbox
+                                    onToggle={() => toggleTask(task)}
+                                    onDelete={() => setDeleteTarget(task)}
+                                />
+                            ))}
+                        </div>
+                    );
+                })()}
             </section>
         </div>
     );

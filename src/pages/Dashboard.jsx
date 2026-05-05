@@ -24,7 +24,9 @@
     const [reminderTasks, setReminderTasks] = useState([]);
     const [showReminderBox, setShowReminderBox] = useState(true);
     const [payDayStaff, setPayDayStaff] = useState([]);
-    const [showPayDayReminder, setShowPayDayReminder] = useState(true);
+    const [showPayDayReminder, setShowPayDayReminder] = useState(() => {
+      return localStorage.getItem('lastPayDayReminderDate') !== new Date().toDateString();
+    });
 
     const fetchReminderTasks = async () => {
       try {
@@ -314,7 +316,10 @@
         {showPayDayReminder && payDayStaff.length > 0 && (
           <PayDayReminderModal
             staff={payDayStaff}
-            onClose={() => setShowPayDayReminder(false)}
+            onClose={() => {
+              setShowPayDayReminder(false);
+              localStorage.setItem('lastPayDayReminderDate', new Date().toDateString());
+            }}
           />
         )}
 

@@ -144,6 +144,7 @@ function formatMoneyInput(value) {
 function isMergedInvoice(sale) {
   return (
     sale?.invoice_no?.startsWith("MERGE-") ||
+    sale?.invoice_no?.startsWith("MG-") ||
     sale?.merged_from ||
     sale?.note?.toLowerCase?.().includes("merged from")
   );
@@ -635,16 +636,52 @@ export default function Sales() {
   function buildMergedInvoice() {
     const firstSale = selectedSales[0];
 
-    const mergedItems = selectedSales.flatMap((sale) =>
-      (sale.items || []).map((item) => ({
-        ...item,
-        invoice_no: sale.invoice_no,
-      }))
+    function shortDate(dateStr) {
+      if (!dateStr) return "";
+      const d = new Date(dateStr);
+      const day = String(d.getDate()).padStart(2, "0");
+      const mon = String(d.getMonth() + 1).padStart(2, "0");
+      const yr = String(d.getFullYear()).slice(2);
+      return `${day}/${mon}/${yr}`;
+    }
+
+    // Sort newest → oldest
+    const sorted = [...selectedSales].sort(
+      (a, b) => new Date(b.created_at) - new Date(a.created_at)
     );
+
+    const mergedItems = [];
+    let groupNo = 0;
+
+    sorted.forEach((sale) => {
+      groupNo++;
+      const items = sale.items || [];
+      const dateTag = shortDate(sale.created_at);
+      const groupNames = items.map((i) =>
+        i?.product
+          ? `${getProductKhmerName(i.product)}${i.custom_label ? ` ${i.custom_label}x3%` : ""}`
+          : "—"
+      );
+
+      items.forEach((item, idx) => {
+        mergedItems.push({
+          ...item,
+          invoice_no: sale.invoice_no,
+          _groupNo: groupNo,
+          _isGroupFirst: idx === 0,
+          _skipNameCell: idx > 0,          // non-first: name cell covered by rowspan
+          _rowspan: idx === 0 ? items.length : 1, // first item spans all rows
+          _groupNames: idx === 0 ? groupNames : null,
+          _dateTag: idx === 0 ? dateTag : null,
+        });
+      });
+    });
+
+    const shortNo = `MG-${String(Date.now()).slice(-4)}`;
 
     return {
       id: `merged-${Date.now()}`,
-      invoice_no: `MERGE-${new Date().getTime()}`,
+      invoice_no: shortNo,
       customer: firstSale?.customer || null,
       customer_id: firstSale?.customer_id || null,
       items: mergedItems,
@@ -904,7 +941,7 @@ export default function Sales() {
 
                           <td style={styles.td}>
                             {display.firstItem?.product
-                              ? getProductKhmerName(display.firstItem.product)
+                              ? `${getProductKhmerName(display.firstItem.product)}${display.firstItem.custom_label ? ` ${display.firstItem.custom_label}x3%` : ""}`
                               : "—"}
                             {display.itemCount > 1 ? ` +${display.itemCount - 1}` : ""}
                           </td>
@@ -1700,7 +1737,7 @@ function SaleMobileCard({
         <span style={styles.mobileLabel}>ផលិតផល</span>
         <strong style={styles.mobileValue}>
           {display.firstItem?.product
-            ? getProductKhmerName(display.firstItem.product)
+            ? `${getProductKhmerName(display.firstItem.product)}${display.firstItem.custom_label ? ` ${display.firstItem.custom_label}x3%` : ""}`
             : "—"}
           {display.itemCount > 1 ? ` +${display.itemCount - 1}` : ""}
         </strong>
@@ -2816,4 +2853,3 @@ function getStyles(isDark, isMobile) {
     },
   };
 }
-
