@@ -228,6 +228,7 @@ export default function Sales() {
   const imageInvoiceRef = useRef(null);
 
   const [sales, setSales] = useState([]);
+  const [hasAutoScrolled, setHasAutoScrolled] = useState(false);
   const [products, setProducts] = useState([]);
   const [filters, setFilters] = useState(INITIAL_FILTERS);
   const [visibleCount, setVisibleCount] = useState(INITIAL_VISIBLE_COUNT);
@@ -280,6 +281,20 @@ export default function Sales() {
     fetchSales();
     fetchProducts();
   }, []);
+
+  useEffect(() => {
+    if (sales.length > 0 && !hasAutoScrolled) {
+      setTimeout(() => {
+        if (tableRef.current) {
+          tableRef.current.scrollTo({
+            left: tableRef.current.scrollWidth,
+            behavior: "smooth",
+          });
+        }
+      }, 100);
+      setHasAutoScrolled(true);
+    }
+  }, [sales.length, hasAutoScrolled]);
 
   // Auto-load deleted list when the section is opened
   useEffect(() => {
@@ -900,6 +915,7 @@ export default function Sales() {
                   <thead>
                     <tr style={styles.headRow}>
                       <th style={styles.th}>ជ្រើស</th>
+                      <th style={{ ...styles.th, textAlign: "left" }}>សកម្មភាព</th>
                       <th style={styles.th}>លេខវិក្កយបត្រ</th>
                       <th style={styles.th}>អតិថិជន</th>
                       <th style={styles.th}>ទូរស័ព្ទ</th>
@@ -912,7 +928,6 @@ export default function Sales() {
                       <th style={styles.th}>ស្ថានភាព</th>
                       <th style={styles.th}>ប្រវត្តិបង់</th>
                       <th style={styles.th}>កាលបរិច្ឆេទ</th>
-                      <th style={{ ...styles.th, textAlign: "right" }}>សកម្មភាព</th>
                     </tr>
                   </thead>
 
@@ -933,6 +948,54 @@ export default function Sales() {
                               onChange={() => toggleSelectSale(sale.id)}
                               style={styles.checkbox}
                             />
+                          </td>
+
+                          <td style={{ ...styles.td, textAlign: "left" }}>
+                            <div style={{ ...styles.actionGroup, justifyContent: "flex-start" }}>
+                              <button
+                                type="button"
+                                onClick={() => openEdit(sale)}
+                                style={styles.editBtn}
+                              >
+                                កែ
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setDeleteSale(sale)}
+                                style={styles.deleteBtn}
+                              >
+                                លុប
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => handlePrint(sale)}
+                                style={styles.printBtn}
+                              >
+                                មើល / បោះពុម្ព
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => handleSaveImage(sale)}
+                                disabled={savingImageId === sale.id}
+                                style={styles.imageBtn}
+                              >
+                                {savingImageId === sale.id
+                                  ? "កំពុងរក្សាទុក..."
+                                  : "រក្សាទុករូបភាព"}
+                              </button>
+
+                              {display.status !== "paid" && (
+                                <button
+                                  type="button"
+                                  onClick={() => openAddPayment(sale)}
+                                  style={styles.payBtn}
+                                >
+                                  បង់ប្រាក់
+                                </button>
+                              )}
+                            </div>
                           </td>
 
                           <td style={styles.tdStrong}>{sale.invoice_no}</td>
@@ -976,54 +1039,6 @@ export default function Sales() {
                           </td>
 
                           <td style={styles.td}>{formatDateTime(sale.created_at)}</td>
-
-                          <td style={{ ...styles.td, textAlign: "right" }}>
-                            <div style={styles.actionGroup}>
-                              {display.status !== "paid" && (
-                                <button
-                                  type="button"
-                                  onClick={() => openAddPayment(sale)}
-                                  style={styles.payBtn}
-                                >
-                                  បង់ប្រាក់
-                                </button>
-                              )}
-
-                              <button
-                                type="button"
-                                onClick={() => openEdit(sale)}
-                                style={styles.editBtn}
-                              >
-                                កែ
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => setDeleteSale(sale)}
-                                style={styles.deleteBtn}
-                              >
-                                លុប
-                              </button>
-
-                              <button
-                                type="button"
-                                onClick={() => handlePrint(sale)}
-                                style={styles.printBtn}
-                              >
-                                មើល / បោះពុម្ព
-                              </button>
-
-                              <button
-                                type="button"
-                                onClick={() => handleSaveImage(sale)}
-                                disabled={savingImageId === sale.id}
-                                style={styles.imageBtn}
-                              >
-                                {savingImageId === sale.id
-                                  ? "កំពុងរក្សាទុក..."
-                                  : "រក្សាទុករូបភាព"}
-                              </button>
-                            </div>
-                          </td>
                         </tr>
                       );
                     })}
@@ -1787,16 +1802,6 @@ function SaleMobileCard({
       </div>
 
       <div style={styles.mobileActions}>
-        {display.status !== "paid" && (
-          <button
-            type="button"
-            onClick={() => openAddPayment(sale)}
-            style={styles.payBtn}
-          >
-            បង់ប្រាក់
-          </button>
-        )}
-
         <button type="button" onClick={() => openEdit(sale)} style={styles.editBtn}>
           កែ
         </button>
@@ -1825,6 +1830,16 @@ function SaleMobileCard({
         >
           {savingImageId === sale.id ? "កំពុងរក្សាទុក..." : "រូបភាព"}
         </button>
+
+        {display.status !== "paid" && (
+          <button
+            type="button"
+            onClick={() => openAddPayment(sale)}
+            style={styles.payBtn}
+          >
+            បង់ប្រាក់
+          </button>
+        )}
       </div>
     </div>
   );
@@ -2407,12 +2422,12 @@ function getStyles(isDark, isMobile) {
       margin: "10px auto 0",
     },
     scrollBtn: {
-      width: 34,
-      height: 34,
-      borderRadius: 10,
+      width: 46,
+      height: 46,
+      borderRadius: 12,
       border: isDark ? "1px solid #334155" : "1px solid #cbd5e1",
       cursor: "pointer",
-      fontSize: 15,
+      fontSize: 24,
       fontWeight: 900,
       background: isDark
         ? "rgba(15, 23, 42, 0.88)"
