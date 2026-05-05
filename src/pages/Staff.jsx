@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useMemo } from "react";
 import api from "../api";
 
 const TYPE_LABELS = {
@@ -183,11 +183,11 @@ function StaffCard({ s, onEdit, onDelete, onDayOff, onAdjust, onHistory }) {
   );
 }
 
-function Modal({ title, onClose, children }) {
+function Modal({ title, onClose, children, maxWidth = "max-w-md" }) {
   return (
     <div className="fixed inset-0 z-[100] flex items-end justify-center sm:items-center p-0 sm:p-4" onClick={onClose}>
       <div className="absolute inset-0 bg-black/50" />
-      <div className="relative z-10 w-full max-w-md rounded-t-3xl sm:rounded-3xl bg-white p-5 sm:p-6 shadow-2xl dark:bg-slate-900 max-h-[90vh] overflow-y-auto" onClick={e=>e.stopPropagation()}>
+      <div className={`relative z-10 w-full ${maxWidth} rounded-t-3xl sm:rounded-3xl bg-white p-5 sm:p-6 shadow-2xl dark:bg-slate-900 max-h-[90vh] overflow-y-auto`} onClick={e=>e.stopPropagation()}>
         <div className="mb-5 flex items-center justify-between">
           <h2 className="text-2xl font-black text-slate-900 dark:text-white">{title}</h2>
           <button onClick={onClose} className="flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-100 text-xl font-black text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300">×</button>
@@ -359,31 +359,126 @@ function AdjustModal({ staff, onClose, onDone }) {
 }
 
 function HistoryModal({ staff, txns, loading, onClose }) {
+  const [visibleCount, setVisibleCount] = useState(7);
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+
+  const txnsWithBalance = useMemo(() => {
+    if (!txns || txns.length === 0) return [];
+    
+    let currentBalance = staff.balance;
+    const result = [];
+    
+    for (let i = 0; i < txns.length; i++) {
+      const tx = txns[i];
+      result.push({ ...tx, balanceAfter: currentBalance });
+      
+      const isCredit = tx.direction === "credit";
+      if (isCredit) {
+        currentBalance -= tx.amount;
+      } else {
+        currentBalance += tx.amount;
+      }
+    }
+    
+    return result;
+  }, [txns, staff.balance]);
+
+  const filteredTxns = useMemo(() => {
+    if (!startDate && !endDate) return txnsWithBalance;
+    
+    return txnsWithBalance.filter(tx => {
+      const txDate = tx.created_at.substring(0, 10);
+      if (startDate && txDate < startDate) return false;
+      if (endDate && txDate > endDate) return false;
+      return true;
+    });
+  }, [txnsWithBalance, startDate, endDate]);
+
   return (
-    <Modal title={`ប្រវត្តិ — ${staff.name}`} onClose={onClose}>
-      <div className="max-h-[55vh] overflow-y-auto space-y-2.5 pr-1">
+    <Modal title={`ប្រវត្តិ — ${staff.name}`} onClose={onClose} maxWidth="max-w-4xl">
+      <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center">
+        <input 
+          type="date" 
+          value={startDate} 
+          onChange={e => setStartDate(e.target.value)} 
+          className="rounded-xl border border-slate-200 px-3 py-2 text-base outline-none focus:border-green-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+        />
+        <span className="text-slate-400 font-bold hidden sm:inline">ដល់</span>
+        <input 
+          type="date" 
+          value={endDate} 
+          onChange={e => setEndDate(e.target.value)} 
+          className="rounded-xl border border-slate-200 px-3 py-2 text-base outline-none focus:border-green-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+        />
+        {(startDate || endDate) && (
+          <button 
+            onClick={() => { setStartDate(""); setEndDate(""); }}
+            className="rounded-xl bg-slate-100 px-4 py-2 text-base font-bold text-slate-500 hover:bg-slate-200 active:scale-95 dark:bg-slate-800 dark:hover:bg-slate-700"
+          >
+            ជម្រះ
+          </button>
+        )}
+      </div>
+
+      <div className="max-h-[55vh] overflow-y-auto pr-3">
         {loading ? <p className="py-8 text-center text-base font-bold text-slate-400">កំពុងទាញ...</p>
-          : txns.length===0 ? <p className="py-8 text-center text-base font-bold text-slate-400">មិនទាន់មានប្រវត្តិ</p>
-          : txns.map(tx => {
-            const c = TYPE_COLORS[tx.type] || TYPE_COLORS.manual_add;
-            const isCredit = tx.direction==="credit";
-            return (
-              <div key={tx.id} className="flex items-start justify-between gap-3 rounded-2xl border border-slate-100 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950">
-                <div className="min-w-0">
-                  <span className="inline-block rounded-full px-3 py-1 text-sm font-black"
-                    style={{ background: c.bg, color: c.color }}>
-                    {TYPE_LABELS[tx.type]||tx.type}
-                  </span>
-                  {tx.days_off && <span className="ml-1 text-sm font-bold text-slate-400">({tx.days_off} ថ្ងៃ)</span>}
-                  {tx.note && <p className="mt-1 text-sm font-semibold text-slate-500 dark:text-slate-400">{tx.note}</p>}
-                  <p className="mt-1 text-sm text-slate-400">{formatDate(tx.created_at)}</p>
+          : filteredTxns.length === 0 ? <p className="py-8 text-center text-base font-bold text-slate-400">មិនទាន់មានប្រវត្តិក្នុងកាលបរិច្ឆេទនេះទេ</p>
+          : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-base whitespace-nowrap">
+                <thead>
+                  <tr className="border-b border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400">
+                    <th className="pb-4 pr-4 font-bold">កាលបរិច្ឆេទ</th>
+                    <th className="pb-4 px-4 font-bold">ប្រភេទ</th>
+                    <th className="pb-4 px-4 font-bold">ចំណាំ</th>
+                    <th className="pb-4 px-4 font-bold text-right">ចំនួន</th>
+                    <th className="pb-4 px-4 font-bold text-right">សមតុល្យ</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800/50">
+                  {filteredTxns.slice(0, visibleCount).map(tx => {
+                    const c = TYPE_COLORS[tx.type] || TYPE_COLORS.manual_add;
+                    const isCredit = tx.direction === "credit";
+                    const isNegBal = tx.balanceAfter < 0;
+                    return (
+                      <tr key={tx.id} className="hover:bg-slate-50 dark:hover:bg-slate-900/40">
+                        <td className="py-4 pr-4 text-slate-600 dark:text-slate-300">
+                          {formatDate(tx.created_at)}
+                        </td>
+                        <td className="py-4 px-4">
+                          <span className="inline-block rounded-full px-3 py-1.5 text-sm font-black"
+                            style={{ background: c.bg, color: c.color }}>
+                            {TYPE_LABELS[tx.type] || tx.type}
+                            {tx.days_off ? ` (${tx.days_off} ថ្ងៃ)` : ""}
+                          </span>
+                        </td>
+                        <td className="py-4 px-4 text-slate-500 dark:text-slate-400 max-w-[250px] truncate" title={tx.note}>
+                          {tx.note || "—"}
+                        </td>
+                        <td className={`py-4 px-4 text-right font-black text-lg ${isCredit ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>
+                          {isCredit ? "+" : "−"}{formatRiel(tx.amount)}
+                        </td>
+                        <td className={`py-4 px-4 text-right font-black text-lg ${isNegBal ? "text-red-600 dark:text-red-400" : "text-slate-900 dark:text-white"}`}>
+                          {isNegBal ? "−" : ""}{formatRiel(Math.abs(tx.balanceAfter))}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+              {filteredTxns.length > visibleCount && (
+                <div className="mt-5 mb-2 flex justify-center">
+                  <button 
+                    onClick={() => setVisibleCount(prev => prev + 5)}
+                    className="rounded-xl bg-slate-100 px-6 py-3 text-base font-bold text-slate-600 transition hover:bg-slate-200 active:scale-95 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
+                  >
+                    មើលបន្ថែម ({filteredTxns.length - visibleCount} ទៀត)
+                  </button>
                 </div>
-                <p className={`shrink-0 text-lg font-black ${isCredit?"text-green-600 dark:text-green-400":"text-red-600 dark:text-red-400"}`}>
-                  {isCredit?"+":" −"}{formatRiel(tx.amount)}
-                </p>
-              </div>
-            );
-          })}
+              )}
+            </div>
+          )}
       </div>
     </Modal>
   );
