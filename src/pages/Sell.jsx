@@ -571,7 +571,7 @@ export default function Sell() {
                   </div>
                 </div>
 
-                <div className="md:col-span-2">
+                <div>
                   <label className="mb-2 block text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
                     លេខ
                   </label>
@@ -590,6 +590,41 @@ export default function Sell() {
                       </button>
                     ))}
                   </div>
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
+                    ស្តុកមាន
+                  </label>
+                  <div className="rounded-xl border border-green-100 dark:border-green-800/60 bg-green-50 dark:bg-green-950/30 px-4 py-3 font-bold text-green-700 dark:text-green-400">
+                    {formatKg(stockKg)}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
+                    ចំនួនកាត់ ៣%
+                  </label>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={customBoxValue}
+                    onChange={(e) => {
+                      const val = parseDecimalInput(e.target.value);
+                      setCustomBoxValue(val);
+                      if (val) {
+                        const num = Number(val);
+                        const result = num - (num * 0.03);
+                        setQuantity(result.toString());
+                      } else {
+                        setQuantity("");
+                      }
+                    }}
+                    onKeyDown={preventNumberControl}
+                    onWheel={(e) => e.currentTarget.blur()}
+                    placeholder="0"
+                    className="sell-no-spinner w-full rounded-xl border border-slate-200 dark:border-slate-700 dark:bg-slate-950 dark:text-white dark:placeholder:text-slate-500 px-4 py-3 outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100"
+                  />
                 </div>
 
                 <div>
@@ -627,32 +662,6 @@ export default function Sell() {
                       ▼
                     </span>
                   </div>
-                </div>
-
-                <div>
-                  <label className="mb-2 block text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
-                    ចំនួនកាត់ ៣%
-                  </label>
-                  <input
-                    type="text"
-                    inputMode="decimal"
-                    value={customBoxValue}
-                    onChange={(e) => {
-                      const val = parseDecimalInput(e.target.value);
-                      setCustomBoxValue(val);
-                      if (val) {
-                        const num = Number(val);
-                        const result = num - (num * 0.03);
-                        setQuantity(result.toString());
-                      } else {
-                        setQuantity("");
-                      }
-                    }}
-                    onKeyDown={preventNumberControl}
-                    onWheel={(e) => e.currentTarget.blur()}
-                    placeholder="0"
-                    className="sell-no-spinner w-full rounded-xl border border-slate-200 dark:border-slate-700 dark:bg-slate-950 dark:text-white dark:placeholder:text-slate-500 px-4 py-3 outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100"
-                  />
                 </div>
 
                 <div>
@@ -708,15 +717,6 @@ export default function Sell() {
                     <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-xs text-slate-500 dark:text-slate-400">
                       ▼
                     </span>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="mb-2 block text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
-                    ស្តុកមាន
-                  </label>
-                  <div className="rounded-xl border border-green-100 dark:border-green-800/60 bg-green-50 dark:bg-green-950/30 px-4 py-3 font-bold text-green-700 dark:text-green-400">
-                    {formatKg(stockKg)}
                   </div>
                 </div>
 
