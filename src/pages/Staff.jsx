@@ -425,48 +425,93 @@ function HistoryModal({ staff, txns, loading, onClose }) {
         {loading ? <p className="py-8 text-center text-base font-bold text-slate-400">កំពុងទាញ...</p>
           : filteredTxns.length === 0 ? <p className="py-8 text-center text-base font-bold text-slate-400">មិនទាន់មានប្រវត្តិក្នុងកាលបរិច្ឆេទនេះទេ</p>
           : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-base whitespace-nowrap">
-                <thead>
-                  <tr className="border-b border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400">
-                    <th className="pb-4 pr-4 font-bold">កាលបរិច្ឆេទ</th>
-                    <th className="pb-4 px-4 font-bold">ប្រភេទ</th>
-                    <th className="pb-4 px-4 font-bold">ចំណាំ</th>
-                    <th className="pb-4 px-4 font-bold text-right">ចំនួន</th>
-                    <th className="pb-4 px-4 font-bold text-right">សមតុល្យ</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-800/50">
-                  {filteredTxns.slice(0, visibleCount).map(tx => {
-                    const c = TYPE_COLORS[tx.type] || TYPE_COLORS.manual_add;
-                    const isCredit = tx.direction === "credit";
-                    const isNegBal = tx.balanceAfter < 0;
-                    return (
-                      <tr key={tx.id} className="hover:bg-slate-50 dark:hover:bg-slate-900/40">
-                        <td className="py-4 pr-4 text-slate-600 dark:text-slate-300">
+            <>
+              {/* Mobile View */}
+              <div className="flex flex-col gap-3 sm:hidden">
+                {filteredTxns.slice(0, visibleCount).map(tx => {
+                  const c = TYPE_COLORS[tx.type] || TYPE_COLORS.manual_add;
+                  const isCredit = tx.direction === "credit";
+                  const isNegBal = tx.balanceAfter < 0;
+                  return (
+                    <div key={tx.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900/50">
+                      <div className="mb-3 flex items-center justify-between">
+                        <span className="text-sm font-bold text-slate-500 dark:text-slate-400">
                           {formatDate(tx.created_at)}
-                        </td>
-                        <td className="py-4 px-4">
-                          <span className="inline-block rounded-full px-3 py-1.5 text-sm font-black"
-                            style={{ background: c.bg, color: c.color }}>
-                            {TYPE_LABELS[tx.type] || tx.type}
-                            {tx.days_off ? ` (${tx.days_off} ថ្ងៃ)` : ""}
-                          </span>
-                        </td>
-                        <td className="py-4 px-4 text-slate-500 dark:text-slate-400 max-w-[250px] truncate" title={tx.note}>
-                          {tx.note || "—"}
-                        </td>
-                        <td className={`py-4 px-4 text-right font-black text-lg ${isCredit ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>
-                          {isCredit ? "+" : "−"}{formatRiel(tx.amount)}
-                        </td>
-                        <td className={`py-4 px-4 text-right font-black text-lg ${isNegBal ? "text-red-600 dark:text-red-400" : "text-slate-900 dark:text-white"}`}>
-                          {isNegBal ? "−" : ""}{formatRiel(Math.abs(tx.balanceAfter))}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+                        </span>
+                        <span className="inline-block rounded-full px-2.5 py-1 text-xs font-black" style={{ background: c.bg, color: c.color }}>
+                          {TYPE_LABELS[tx.type] || tx.type}
+                          {tx.days_off ? ` (${tx.days_off} ថ្ងៃ)` : ""}
+                        </span>
+                      </div>
+                      {tx.note && (
+                        <p className="mb-3 text-sm font-bold text-slate-600 dark:text-slate-300">
+                          {tx.note}
+                        </p>
+                      )}
+                      <div className="flex items-center justify-between border-t border-slate-200 pt-3 dark:border-slate-700/50">
+                        <div>
+                          <p className="text-xs font-bold text-slate-400">ចំនួន</p>
+                          <p className={`text-base font-black ${isCredit ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>
+                            {isCredit ? "+" : "−"}{formatRiel(tx.amount)}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-xs font-bold text-slate-400">សមតុល្យ</p>
+                          <p className={`text-base font-black ${isNegBal ? "text-red-600 dark:text-red-400" : "text-slate-900 dark:text-white"}`}>
+                            {isNegBal ? "−" : ""}{formatRiel(Math.abs(tx.balanceAfter))}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Desktop View */}
+              <div className="hidden sm:block overflow-x-auto">
+                <table className="w-full text-left text-base whitespace-nowrap">
+                  <thead>
+                    <tr className="border-b border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400">
+                      <th className="pb-4 pr-4 font-bold">កាលបរិច្ឆេទ</th>
+                      <th className="pb-4 px-4 font-bold">ប្រភេទ</th>
+                      <th className="pb-4 px-4 font-bold">ចំណាំ</th>
+                      <th className="pb-4 px-4 font-bold text-right">ចំនួន</th>
+                      <th className="pb-4 px-4 font-bold text-right">សមតុល្យ</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800/50">
+                    {filteredTxns.slice(0, visibleCount).map(tx => {
+                      const c = TYPE_COLORS[tx.type] || TYPE_COLORS.manual_add;
+                      const isCredit = tx.direction === "credit";
+                      const isNegBal = tx.balanceAfter < 0;
+                      return (
+                        <tr key={tx.id} className="hover:bg-bg-slate-50 dark:hover:bg-slate-900/40">
+                          <td className="py-4 pr-4 text-slate-600 dark:text-slate-300">
+                            {formatDate(tx.created_at)}
+                          </td>
+                          <td className="py-4 px-4">
+                            <span className="inline-block rounded-full px-3 py-1.5 text-sm font-black"
+                              style={{ background: c.bg, color: c.color }}>
+                              {TYPE_LABELS[tx.type] || tx.type}
+                              {tx.days_off ? ` (${tx.days_off} ថ្ងៃ)` : ""}
+                            </span>
+                          </td>
+                          <td className="py-4 px-4 text-slate-500 dark:text-slate-400 max-w-[250px] truncate" title={tx.note}>
+                            {tx.note || "—"}
+                          </td>
+                          <td className={`py-4 px-4 text-right font-black text-lg ${isCredit ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>
+                            {isCredit ? "+" : "−"}{formatRiel(tx.amount)}
+                          </td>
+                          <td className={`py-4 px-4 text-right font-black text-lg ${isNegBal ? "text-red-600 dark:text-red-400" : "text-slate-900 dark:text-white"}`}>
+                            {isNegBal ? "−" : ""}{formatRiel(Math.abs(tx.balanceAfter))}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
               {filteredTxns.length > visibleCount && (
                 <div className="mt-5 mb-2 flex justify-center">
                   <button 
@@ -477,7 +522,7 @@ function HistoryModal({ staff, txns, loading, onClose }) {
                   </button>
                 </div>
               )}
-            </div>
+            </>
           )}
       </div>
     </Modal>
