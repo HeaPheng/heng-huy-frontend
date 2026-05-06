@@ -530,6 +530,7 @@ export default function ManualInvoice() {
                 form={editForm}
                 setForm={setEditForm}
                 paymentStatus={editInvoice?.payment_status || "unpaid"}
+                inModal={true}
               />
 
               <ItemsCard
@@ -537,6 +538,7 @@ export default function ManualInvoice() {
                 updateItem={updateEditItem}
                 addItem={addEditItem}
                 removeItem={removeEditItem}
+                inModal={true}
               />
 
               <div className="rounded-2xl bg-slate-100 p-4 dark:bg-slate-800">
@@ -554,7 +556,7 @@ export default function ManualInvoice() {
         )}
 
         {paymentOpen && paymentInvoice && (
-          <Modal title="បន្ថែមការបង់ប្រាក់" onClose={() => setPaymentOpen(false)}>
+          <Modal title="បន្ថែមការបង់ប្រាក់" onClose={() => setPaymentOpen(false)} maxWidth="max-w-3xl">
             <form onSubmit={handlePaymentSubmit} className="space-y-5">
               <div className="grid gap-3 md:grid-cols-3">
                 <StatBox label="សរុប" value={formatRiel(paymentInvoice.total_amount)} />
@@ -1381,9 +1383,13 @@ function AmountBox({ label, value, danger }) {
   );
 }
 
-function InvoiceInfoCard({ form, setForm, paymentStatus }) {
+function InvoiceInfoCard({ form, setForm, paymentStatus, inModal }) {
+  const wrapperClass = inModal
+    ? ""
+    : "rounded-[28px] border border-green-100 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900";
+
   return (
-    <div className="rounded-[28px] border border-green-100 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+    <div className={wrapperClass}>
       <div className="mb-4 flex items-center justify-between gap-3">
         <h2 className="text-lg font-black text-slate-950 dark:text-white">
           ព័ត៌មានវិក្កយបត្រ
@@ -1435,7 +1441,7 @@ function InvoiceInfoCard({ form, setForm, paymentStatus }) {
   );
 }
 
-function ItemsCard({ items, updateItem, addItem, removeItem }) {
+function ItemsCard({ items, updateItem, addItem, removeItem, inModal }) {
   const desktopNameRefs = useRef([]);
   const mobileNameRefs = useRef([]);
   const pendingFocusRef = useRef(false);
@@ -1481,8 +1487,12 @@ function ItemsCard({ items, updateItem, addItem, removeItem }) {
     addItem();
   }
 
+  const wrapperClass = inModal
+    ? ""
+    : "rounded-[28px] border border-green-100 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900 md:p-6";
+
   return (
-    <div className="rounded-[28px] border border-green-100 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900 md:p-6">
+    <div className={wrapperClass}>
       <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <SectionTitle title="មុខទំនិញ" subtitle="អាចបន្ថែមបានច្រើនបំផុត 10 មុខ" />
 
