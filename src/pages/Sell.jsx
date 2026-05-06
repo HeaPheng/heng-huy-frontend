@@ -594,32 +594,6 @@ export default function Sell() {
 
                 <div>
                   <label className="mb-2 block text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
-                    ចំនួនកាត់ ៣%
-                  </label>
-                  <input
-                    type="text"
-                    inputMode="decimal"
-                    value={customBoxValue}
-                    onChange={(e) => {
-                      const val = parseDecimalInput(e.target.value);
-                      setCustomBoxValue(val);
-                      if (val) {
-                        const num = Number(val);
-                        const result = num - (num * 0.03);
-                        setQuantity(result.toString());
-                      } else {
-                        setQuantity("");
-                      }
-                    }}
-                    onKeyDown={preventNumberControl}
-                    onWheel={(e) => e.currentTarget.blur()}
-                    placeholder="0"
-                    className="sell-no-spinner w-full rounded-xl border border-slate-200 dark:border-slate-700 dark:bg-slate-950 dark:text-white dark:placeholder:text-slate-500 px-4 py-3 outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100"
-                  />
-                </div>
-
-                <div>
-                  <label className="mb-2 block text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
                     បរិមាណ
                   </label>
                   <div className="relative">
@@ -653,6 +627,32 @@ export default function Sell() {
                       ▼
                     </span>
                   </div>
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
+                    ចំនួនកាត់ ៣%
+                  </label>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={customBoxValue}
+                    onChange={(e) => {
+                      const val = parseDecimalInput(e.target.value);
+                      setCustomBoxValue(val);
+                      if (val) {
+                        const num = Number(val);
+                        const result = num - (num * 0.03);
+                        setQuantity(result.toString());
+                      } else {
+                        setQuantity("");
+                      }
+                    }}
+                    onKeyDown={preventNumberControl}
+                    onWheel={(e) => e.currentTarget.blur()}
+                    placeholder="0"
+                    className="sell-no-spinner w-full rounded-xl border border-slate-200 dark:border-slate-700 dark:bg-slate-950 dark:text-white dark:placeholder:text-slate-500 px-4 py-3 outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100"
+                  />
                 </div>
 
                 <div>
