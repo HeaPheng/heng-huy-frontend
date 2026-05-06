@@ -233,6 +233,7 @@ export default function Sales() {
   const [filters, setFilters] = useState(INITIAL_FILTERS);
   const [visibleCount, setVisibleCount] = useState(INITIAL_VISIBLE_COUNT);
   const [selectedSaleIds, setSelectedSaleIds] = useState([]);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   const [printSale, setPrintSale] = useState(null);
   const [imageSale, setImageSale] = useState(null);
@@ -847,6 +848,25 @@ export default function Sales() {
               onChange={(e) => updateFilter("dateTo", e.target.value)}
               style={styles.date}
             />
+
+            <button
+              type="button"
+              onClick={async () => {
+                setIsRefreshing(true);
+                await Promise.all([fetchSales(), fetchProducts()]);
+                setIsRefreshing(false);
+              }}
+              disabled={isRefreshing}
+              style={{
+                ...styles.refreshBtn,
+                opacity: isRefreshing ? 0.7 : 1,
+                cursor: isRefreshing ? "not-allowed" : "pointer",
+                transition: "all 0.2s ease"
+              }}
+              title="Refresh"
+            >
+              {isRefreshing ? "កំពុងទាញ..." : "ទាញថ្មី"}
+            </button>
 
             {hasActiveFilters && (
               <button type="button" onClick={clearFilters} style={styles.clearBtn}>
@@ -1952,7 +1972,7 @@ function getStyles(isDark, isMobile) {
       gap: 14,
     },
     search: {
-      flex: isMobile ? "1 1 100%" : "1 1 320px",
+      flex: isMobile ? "1 1 100%" : "1 1 200px",
       height: 48,
       borderRadius: 12,
       border: isDark ? "1px solid #334155" : "1px solid #d6ead8",
@@ -1964,19 +1984,6 @@ function getStyles(isDark, isMobile) {
       color: isDark ? "#f8fafc" : "#0f172a",
     },
     select: {
-      flex: isMobile ? "1 1 calc(50% - 8px)" : "0 1 250px",
-      height: 48,
-      borderRadius: 12,
-      border: isDark ? "1px solid #334155" : "1px solid #d6ead8",
-      padding: "0 16px",
-      fontSize: 15,
-      fontWeight: 800,
-      outline: "none",
-      boxSizing: "border-box",
-      background: isDark ? "#0f172a" : "white",
-      color: isDark ? "#f8fafc" : "#0f172a",
-    },
-    statusSelect: {
       flex: isMobile ? "1 1 calc(50% - 8px)" : "0 1 180px",
       height: 48,
       borderRadius: 12,
@@ -1989,8 +1996,21 @@ function getStyles(isDark, isMobile) {
       background: isDark ? "#0f172a" : "white",
       color: isDark ? "#f8fafc" : "#0f172a",
     },
+    statusSelect: {
+      flex: isMobile ? "1 1 calc(50% - 8px)" : "0 1 150px",
+      height: 48,
+      borderRadius: 12,
+      border: isDark ? "1px solid #334155" : "1px solid #d6ead8",
+      padding: "0 16px",
+      fontSize: 15,
+      fontWeight: 800,
+      outline: "none",
+      boxSizing: "border-box",
+      background: isDark ? "#0f172a" : "white",
+      color: isDark ? "#f8fafc" : "#0f172a",
+    },
     date: {
-      flex: isMobile ? "1 1 calc(50% - 8px)" : "0 1 170px",
+      flex: isMobile ? "1 1 calc(50% - 8px)" : "0 1 140px",
       height: 48,
       borderRadius: 12,
       border: isDark ? "1px solid #334155" : "1px solid #d6ead8",
@@ -2012,6 +2032,18 @@ function getStyles(isDark, isMobile) {
       cursor: "pointer",
       background: isDark ? "#1e293b" : "#f8fafc",
       color: isDark ? "#e2e8f0" : "#334155",
+    },
+    refreshBtn: {
+      height: 48,
+      borderRadius: 12,
+      border: isDark ? "1px solid #1e40af" : "1px solid #3b82f6",
+      padding: "0 18px",
+      fontSize: 15,
+      fontWeight: 800,
+      cursor: "pointer",
+      background: isDark ? "#1e3a8a" : "#eff6ff",
+      color: isDark ? "#60a5fa" : "#2563eb",
+      flexShrink: 0,
     },
     clearSmallBtn: {
       border: "none",
