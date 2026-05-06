@@ -558,7 +558,7 @@ export default function ManualInvoice() {
         {paymentOpen && paymentInvoice && (
           <Modal title="បន្ថែមការបង់ប្រាក់" onClose={() => setPaymentOpen(false)} maxWidth="max-w-3xl">
             <form onSubmit={handlePaymentSubmit} className="space-y-5">
-              <div className="grid gap-3 md:grid-cols-3">
+              <div className="grid grid-cols-3 gap-3">
                 <StatBox label="សរុប" value={formatRiel(paymentInvoice.total_amount)} />
                 <StatBox label="បានបង់" value={formatRiel(paymentInvoice.paid_amount)} />
                 <StatBox
@@ -568,7 +568,7 @@ export default function ManualInvoice() {
                 />
               </div>
 
-              <div className="grid gap-4 md:grid-cols-3">
+              <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
                 <InputBlock label="ចំនួនបង់">
                   <input
                     type="number"
@@ -1390,14 +1390,16 @@ function InvoiceInfoCard({ form, setForm, paymentStatus, inModal }) {
 
   return (
     <div className={wrapperClass}>
-      <div className="mb-4 flex items-center justify-between gap-3">
-        <h2 className="text-lg font-black text-slate-950 dark:text-white">
-          ព័ត៌មានវិក្កយបត្រ
-        </h2>
-        <Badge className={statusClass(paymentStatus)}>{statusLabel(paymentStatus)}</Badge>
-      </div>
+      {!inModal && (
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <h2 className="text-lg font-black text-slate-950 dark:text-white">
+            ព័ត៌មានវិក្កយបត្រ
+          </h2>
+          <Badge className={statusClass(paymentStatus)}>{statusLabel(paymentStatus)}</Badge>
+        </div>
+      )}
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
         <InputBlock label="ថ្ងៃទី">
           <input
             type="date"
@@ -1493,8 +1495,12 @@ function ItemsCard({ items, updateItem, addItem, removeItem, inModal }) {
 
   return (
     <div className={wrapperClass}>
-      <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <SectionTitle title="មុខទំនិញ" subtitle="អាចបន្ថែមបានច្រើនបំផុត 10 មុខ" />
+      <div className="mb-4 flex items-center justify-between gap-3">
+        {!inModal ? (
+          <SectionTitle title="មុខទំនិញ" subtitle="អាចបន្ថែមបានច្រើនបំផុត 10 មុខ" />
+        ) : (
+          <div className="text-sm font-black text-slate-500">មុខទំនិញ</div>
+        )}
 
         <button
           type="button"
@@ -1765,7 +1771,7 @@ function Modal({ title, children, onClose, maxWidth = "max-w-5xl" }) {
     <div className="fixed inset-0 z-[100] flex items-end justify-center sm:items-center p-0 sm:p-4" onClick={onClose}>
       <div className="absolute inset-0 bg-black/50" />
       <div className={`relative z-10 w-full ${maxWidth} rounded-t-3xl sm:rounded-3xl bg-white p-5 sm:p-6 shadow-2xl dark:bg-slate-900 max-h-[90vh] overflow-y-auto`} onClick={e=>e.stopPropagation()}>
-        <div className="sticky top-0 z-10 mb-5 flex items-center justify-between bg-white pb-3 dark:bg-slate-900">
+        <div className="mb-5 flex items-center justify-between">
           <h2 className="text-2xl font-black text-slate-900 dark:text-white">{title}</h2>
           <button
             type="button"
@@ -1783,18 +1789,18 @@ function Modal({ title, children, onClose, maxWidth = "max-w-5xl" }) {
 
 function ModalActions({ loading, onCancel, submitLabel }) {
   return (
-    <div className="flex flex-col-reverse gap-3 md:flex-row md:justify-end">
+    <div className="grid grid-cols-2 gap-3 md:flex md:justify-end">
       <button
         type="button"
         onClick={onCancel}
-        className="rounded-2xl bg-slate-100 px-6 py-3 font-black text-slate-700 dark:bg-slate-800 dark:text-slate-100"
+        className="rounded-2xl bg-slate-100 px-4 py-3.5 text-base font-black text-slate-700 transition active:scale-95 dark:bg-slate-800 dark:text-slate-100"
       >
         បោះបង់
       </button>
       <button
         type="submit"
         disabled={loading}
-        className="rounded-2xl bg-green-600 px-6 py-3 font-black text-white disabled:opacity-50"
+        className="rounded-2xl bg-green-600 px-4 py-3.5 text-base font-black text-white transition active:scale-95 disabled:opacity-50"
       >
         {loading ? "កំពុងរក្សាទុក..." : submitLabel}
       </button>
