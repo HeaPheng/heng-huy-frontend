@@ -368,7 +368,7 @@ export default function DailySalesHistory() {
           valueKey="invoice"
           details={[
             { label: "បានទូទាត់ពេញ", value: `${summary.paidInvoices} វិក្កយបត្រ` },
-            { label: "បញ្ញើមុន",      value: `${summary.depositInvoices} វិក្កយបត្រ` },
+            { label: "ជំពាក់",      value: `${summary.depositInvoices} វិក្កយបត្រ` },
             { label: "មិនទាន់បង់",   value: `${summary.unpaidInvoices} វិក្កយបត្រ` },
           ]}
         />
