@@ -313,44 +313,159 @@ function AdjustModal({ staff, onClose, onDone }) {
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
 
-  function handleDir(d) { setDirection(d); setType(d==="credit"?"manual_add":"advance"); }
+  function handleDir(d) {
+    setDirection(d);
+    setType(d === "credit" ? "manual_add" : "advance");
+    setAmount("");
+    setNote("");
+  }
+
+  function handleTypeChange(newType) {
+    setType(newType);
+    if (newType === "salary_deduct") {
+      setAmount(String(staff.salary_per_month));
+      setNote("ដកប្រាក់ខែ");
+    } else if (newType === "salary_deduct_all") {
+      setAmount(String(Math.abs(staff.balance)));
+      setNote("ដកប្រាក់ខែទាំងអស់");
+    } else {
+      setAmount("");
+      setNote("");
+    }
+  }
+
+  function handlePaySalary() {
+    setAmount(String(staff.salary_per_month));
+    setNote("បើកប្រាក់ខែ");
+  }
 
   async function handleSubmit(e) {
-    e.preventDefault(); setSaving(true); setErr("");
-    try { await api.post(`/staff/${staff.id}/adjust`, { direction, type, amount: Number(amount), note }); onDone();
-    } catch (ex) { setErr(ex.response?.data?.message || "កំហុស"); } finally { setSaving(false); }
+    e.preventDefault();
+    setSaving(true);
+    setErr("");
+
+    // Map UI-only types back to API types
+    const apiType =
+      type === "salary_deduct" || type === "salary_deduct_all"
+        ? "manual_deduct"
+        : type;
+
+    try {
+      await api.post(`/staff/${staff.id}/adjust`, {
+        direction,
+        type: apiType,
+        amount: Number(amount),
+        note,
+      });
+      onDone();
+    } catch (ex) {
+      setErr(ex.response?.data?.message || "កំហុស");
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
     <Modal title={`កែប្រាក់ — ${staff.name}`} onClose={onClose}>
       <form onSubmit={handleSubmit} className="space-y-4">
+
+        {/* Direction toggle */}
         <div className="grid grid-cols-2 gap-2">
-          {[["debit","− ដកប្រាក់"],["credit","+ បន្ថែមប្រាក់"]].map(([d,lbl])=>(
-            <button key={d} type="button" onClick={()=>handleDir(d)}
-              className={`rounded-2xl py-3.5 text-base font-black transition active:scale-95 ${direction===d
-                ? d==="debit"?"bg-red-600 text-white":"bg-green-600 text-white"
-                : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300"}`}>
+          {[
+            ["debit",  "− ដកប្រាក់"],
+            ["credit", "+ បន្ថែមប្រាក់"],
+          ].map(([d, lbl]) => (
+            <button key={d} type="button" onClick={() => handleDir(d)}
+              className={`rounded-2xl py-3.5 text-base font-black transition active:scale-95 ${
+                direction === d
+                  ? d === "debit"
+                    ? "bg-red-600 text-white"
+                    : "bg-green-600 text-white"
+                  : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300"
+              }`}>
               {lbl}
             </button>
           ))}
         </div>
-        {direction==="debit" && (
-          <div><label className={LABEL}>ប្រភេទ</label>
-            <select value={type} onChange={e=>setType(e.target.value)} className={INPUT}>
+
+        {/* ── DEBIT TAB ── */}
+        {direction === "debit" && (
+          <div>
+            <label className={LABEL}>ប្រភេទ</label>
+            <select value={type} onChange={e => handleTypeChange(e.target.value)} className={INPUT}>
               <option value="advance">ដកប្រាក់ជាមុន (Advance)</option>
               <option value="manual_deduct">ដកប្រាក់ធម្មតា</option>
+              <option value="salary_deduct">ដកប្រាក់ខែ</option>
+              <option value="salary_deduct_all">ដកប្រាក់ខែទាំងអស់</option>
             </select>
+
+            {type === "salary_deduct" && (
+              <p className="mt-2 rounded-xl bg-red-50 px-3 py-2 text-sm font-bold text-red-600 dark:bg-red-950/20 dark:text-red-400">
+                💡 បានបំពេញដោយស្វ័យប្រវត្តិ: {formatRiel(staff.salary_per_month)} (ប្រាក់ខែ/ខែ)
+              </p>
+            )}
+            {type === "salary_deduct_all" && (
+              <p className="mt-2 rounded-xl bg-red-50 px-3 py-2 text-sm font-bold text-red-600 dark:bg-red-950/20 dark:text-red-400">
+                💡 បានបំពេញដោយស្វ័យប្រវត្តិ: {formatRiel(Math.abs(staff.balance))} (សមតុល្យបច្ចុប្បន្ន)
+              </p>
+            )}
           </div>
         )}
-        <div><label className={LABEL}>ចំនួន (៛) *</label>
-          <input required type="number" min="1" value={amount} onChange={e=>setAmount(e.target.value)} className={INPUT} />
+
+        {/* ── CREDIT TAB — Pay Salary quick-fill button ── */}
+        {direction === "credit" && (
+          <button
+            type="button"
+            onClick={handlePaySalary}
+            className="flex w-full items-center justify-between rounded-2xl border-2 border-dashed border-green-300 bg-green-50 px-5 py-3.5 text-left transition hover:border-green-500 hover:bg-green-100 active:scale-95 dark:border-green-800 dark:bg-green-950/20 dark:hover:bg-green-950/40"
+          >
+            <div>
+              <p className="text-base font-black text-green-700 dark:text-green-400">💵 បើកប្រាក់ខែ</p>
+              <p className="mt-0.5 text-sm font-semibold text-green-600 dark:text-green-500">
+                {formatRiel(staff.salary_per_month)}
+              </p>
+            </div>
+            <span className="rounded-xl bg-green-600 px-3 py-1.5 text-sm font-black text-white">
+              បំពេញ
+            </span>
+          </button>
+        )}
+
+        {/* Amount */}
+        <div>
+          <label className={LABEL}>ចំនួន (៛) *</label>
+          <input
+            required
+            type="number"
+            min="1"
+            value={amount}
+            onChange={e => setAmount(e.target.value)}
+            className={INPUT}
+          />
         </div>
-        <div><label className={LABEL}>ចំណាំ *</label>
-          <input required value={note} onChange={e=>setNote(e.target.value)} className={INPUT} placeholder="ឧ. ដកប្រាក់ជាមុន" />
+
+        {/* Note */}
+        <div>
+          <label className={LABEL}>ចំណាំ *</label>
+          <input
+            required
+            value={note}
+            onChange={e => setNote(e.target.value)}
+            className={INPUT}
+            placeholder="ឧ. ដកប្រាក់ជាមុន"
+          />
         </div>
+
         {err && <p className="text-base font-bold text-red-500">{err}</p>}
-        <button disabled={saving||!amount||!note}
-          className={`w-full rounded-2xl py-3.5 text-base font-black text-white transition active:scale-95 disabled:opacity-60 ${direction==="debit"?"bg-red-600 hover:bg-red-700":"bg-green-600 hover:bg-green-700"}`}>
+
+        <button
+          disabled={saving || !amount || !note}
+          className={`w-full rounded-2xl py-3.5 text-base font-black text-white transition active:scale-95 disabled:opacity-60 ${
+            direction === "debit"
+              ? "bg-red-600 hover:bg-red-700"
+              : "bg-green-600 hover:bg-green-700"
+          }`}
+        >
           {saving ? "កំពុង..." : "បញ្ជាក់"}
         </button>
       </form>
@@ -365,14 +480,14 @@ function HistoryModal({ staff, txns, loading, onClose }) {
 
   const txnsWithBalance = useMemo(() => {
     if (!txns || txns.length === 0) return [];
-    
+
     let currentBalance = staff.balance;
     const result = [];
-    
+
     for (let i = 0; i < txns.length; i++) {
       const tx = txns[i];
       result.push({ ...tx, balanceAfter: currentBalance });
-      
+
       const isCredit = tx.direction === "credit";
       if (isCredit) {
         currentBalance -= tx.amount;
@@ -380,13 +495,13 @@ function HistoryModal({ staff, txns, loading, onClose }) {
         currentBalance += tx.amount;
       }
     }
-    
+
     return result;
   }, [txns, staff.balance]);
 
   const filteredTxns = useMemo(() => {
     if (!startDate && !endDate) return txnsWithBalance;
-    
+
     return txnsWithBalance.filter(tx => {
       const txDate = tx.created_at.substring(0, 10);
       if (startDate && txDate < startDate) return false;
@@ -398,21 +513,21 @@ function HistoryModal({ staff, txns, loading, onClose }) {
   return (
     <Modal title={`ប្រវត្តិ — ${staff.name}`} onClose={onClose} maxWidth="max-w-4xl">
       <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center">
-        <input 
-          type="date" 
-          value={startDate} 
-          onChange={e => setStartDate(e.target.value)} 
+        <input
+          type="date"
+          value={startDate}
+          onChange={e => setStartDate(e.target.value)}
           className="rounded-xl border border-slate-200 px-3 py-2 text-base outline-none focus:border-green-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
         />
         <span className="text-slate-400 font-bold hidden sm:inline">ដល់</span>
-        <input 
-          type="date" 
-          value={endDate} 
-          onChange={e => setEndDate(e.target.value)} 
+        <input
+          type="date"
+          value={endDate}
+          onChange={e => setEndDate(e.target.value)}
           className="rounded-xl border border-slate-200 px-3 py-2 text-base outline-none focus:border-green-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
         />
         {(startDate || endDate) && (
-          <button 
+          <button
             onClick={() => { setStartDate(""); setEndDate(""); }}
             className="rounded-xl bg-slate-100 px-4 py-2 text-base font-bold text-slate-500 hover:bg-slate-200 active:scale-95 dark:bg-slate-800 dark:hover:bg-slate-700"
           >
@@ -514,7 +629,7 @@ function HistoryModal({ staff, txns, loading, onClose }) {
 
               {filteredTxns.length > visibleCount && (
                 <div className="mt-5 mb-2 flex justify-center">
-                  <button 
+                  <button
                     onClick={() => setVisibleCount(prev => prev + 5)}
                     className="rounded-xl bg-slate-100 px-6 py-3 text-base font-bold text-slate-600 transition hover:bg-slate-200 active:scale-95 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
                   >
