@@ -15,6 +15,10 @@ export default function DailySalesHistory() {
   const [backgroundLoading, setBackgroundLoading] = useState(false);
   const [backgroundReady, setBackgroundReady] = useState(false);
 
+  // Per-product breakdown states
+  const [perProductToday, setPerProductToday] = useState([]); // [{product, totalSold, totalAdded}]
+  const [perProductAll, setPerProductAll] = useState([]);     // [{product, rows[]}]
+
   const [visibleDays, setVisibleDays] = useState(7);
   const [dateFilterType, setDateFilterType] = useState("today");
   const [selectedDay, setSelectedDay] = useState(todayDate());
@@ -34,7 +38,6 @@ export default function DailySalesHistory() {
         console.error(err);
       }
     }
-
     loadProducts();
   }, []);
 
@@ -46,6 +49,8 @@ export default function DailySalesHistory() {
     setBackgroundReady(false);
     setTodayLoading(true);
     setTodayError("");
+    setPerProductToday([]);
+    setPerProductAll([]);
 
     const productQuery =
       selectedProductId !== "overall" ? `product_id=${selectedProductId}` : "";
@@ -53,10 +58,8 @@ export default function DailySalesHistory() {
     async function fetchAggregate(extraQuery = "") {
       const queryParts = [productQuery, extraQuery].filter(Boolean);
       const query = queryParts.length ? `?${queryParts.join("&")}` : "";
-
       const res = await api.get(`/daily-history/aggregate${query}`);
       const data = Array.isArray(res.data) ? res.data : res.data.data || [];
-
       return sortRowsNewest(
         data.map((row) => ({
           ...row,
@@ -69,12 +72,46 @@ export default function DailySalesHistory() {
       );
     }
 
+    // Fetch per-product breakdown rows in parallel
+    async function fetchPerProductRows(dateQuery = "") {
+      if (selectedProductId !== "overall" || products.length === 0) return [];
+      const results = await Promise.all(
+        products.map(async (product) => {
+          const queryParts = [`product_id=${product.id}`, dateQuery].filter(Boolean);
+          const query = `?${queryParts.join("&")}`;
+          try {
+            const res = await api.get(`/daily-history/aggregate${query}`);
+            const rows = Array.isArray(res.data) ? res.data : res.data.data || [];
+            return { product, rows };
+          } catch {
+            return { product, rows: [] };
+          }
+        })
+      );
+      return results;
+    }
+
     async function phase1() {
       try {
-        const rows = await fetchAggregate(`date=${todayDate()}`);
+        const [rows, perProduct] = await Promise.all([
+          fetchAggregate(`date=${todayDate()}`),
+          fetchPerProductRows(`date=${todayDate()}`),
+        ]);
 
         if (fetchKeyRef.current !== fetchKey) return;
         setTodayRows(rows);
+
+        // Summarise to {product, totalSold, totalAdded, totalMoney, totalPaid, totalBalance, totalSaleAmount} for today
+        const todaySummaries = perProduct.map(({ product, rows: pRows }) => ({
+          product,
+          totalSold:       pRows.reduce((s, r) => s + Number(r.sold_kg      || 0), 0),
+          totalAdded:      pRows.reduce((s, r) => s + Number(r.added_kg     || 0), 0),
+          totalMoney:      pRows.reduce((s, r) => s + Number(r.money_amount || 0), 0),
+          totalPaid:       pRows.reduce((s, r) => s + Number(r.paid_amount  || 0), 0),
+          totalBalance:    pRows.reduce((s, r) => s + Number(r.balance_amount || 0), 0),
+          totalSaleAmount: pRows.reduce((s, r) => s + Number(r.total_amount || 0), 0),
+        }));
+        setPerProductToday(todaySummaries);
       } catch (err) {
         if (fetchKeyRef.current !== fetchKey) return;
         console.error(err);
@@ -86,12 +123,15 @@ export default function DailySalesHistory() {
 
     async function phase2() {
       setBackgroundLoading(true);
-
       try {
-        const rows = await fetchAggregate();
+        const [rows, perProduct] = await Promise.all([
+          fetchAggregate(),
+          fetchPerProductRows(),
+        ]);
 
         if (fetchKeyRef.current !== fetchKey) return;
         setAllRows(rows);
+        setPerProductAll(perProduct);
         setBackgroundReady(true);
       } catch (err) {
         console.error("Background history fetch failed:", err);
@@ -122,23 +162,16 @@ export default function DailySalesHistory() {
 
   const filteredRows = useMemo(() => {
     const sorted = sortRowsNewest(activeRows);
-
     if (dateFilterType === "today") return sorted;
-
-    if (dateFilterType === "day") {
-      return sorted.filter((row) => row.date === selectedDay);
-    }
-
+    if (dateFilterType === "day") return sorted.filter((row) => row.date === selectedDay);
     if (dateFilterType === "week") {
       const range = getWeekRange(selectedWeek);
       if (!range) return sorted;
       return sorted.filter((row) => row.date >= range.start && row.date <= range.end);
     }
-
     if (dateFilterType === "month") {
       return sorted.filter((row) => String(row.date || "").startsWith(selectedMonth));
     }
-
     return sorted;
   }, [activeRows, dateFilterType, selectedDay, selectedWeek, selectedMonth]);
 
@@ -152,30 +185,67 @@ export default function DailySalesHistory() {
   const summary = useMemo(() => {
     return visibleRows.reduce(
       (acc, row) => {
-        acc.totalSold += Number(row.sold_kg || 0);
-        acc.totalAdded += Number(row.added_kg || 0);
-        acc.totalMoney += Number(row.money_amount || 0);
-        acc.totalPaid += Number(row.paid_amount || 0);
-        acc.totalBalance += Number(row.balance_amount || 0);
-        acc.totalSaleAmount += Number(row.total_amount || 0);
-        acc.totalInvoices += Number(row.invoice_count || 0);
-        acc.totalOpening += Number(row.first_stock_kg || 0);
-        acc.totalClosing += Number(row.last_stock_kg || 0);
+        acc.totalSold        += Number(row.sold_kg             || 0);
+        acc.totalAdded       += Number(row.added_kg            || 0);
+        acc.totalMoney       += Number(row.money_amount        || 0);
+        acc.totalPaid        += Number(row.paid_amount         || 0);
+        acc.totalBalance     += Number(row.balance_amount      || 0);
+        acc.totalSaleAmount  += Number(row.total_amount        || 0);
+        acc.totalInvoices    += Number(row.invoice_count       || 0);
+        acc.totalOpening     += Number(row.first_stock_kg      || 0);
+        acc.totalClosing     += Number(row.last_stock_kg       || 0);
+        acc.paidInvoices     += Number(row.paid_invoice_count     || 0);
+        acc.depositInvoices  += Number(row.deposit_invoice_count  || 0);
+        acc.unpaidInvoices   += Number(row.unpaid_invoice_count   || 0);
         return acc;
       },
       {
-        totalSold: 0,
-        totalAdded: 0,
-        totalMoney: 0,
-        totalPaid: 0,
-        totalBalance: 0,
-        totalSaleAmount: 0,
-        totalInvoices: 0,
-        totalOpening: 0,
-        totalClosing: 0,
+        totalSold: 0, totalAdded: 0, totalMoney: 0, totalPaid: 0,
+        totalBalance: 0, totalSaleAmount: 0, totalInvoices: 0,
+        totalOpening: 0, totalClosing: 0,
+        paidInvoices: 0, depositInvoices: 0, unpaidInvoices: 0,
       }
     );
   }, [visibleRows]);
+
+  // Per-product summaries filtered to the current date range
+  const perProductSummaries = useMemo(() => {
+    if (selectedProductId !== "overall") return [];
+
+    if (dateFilterType === "today") {
+      return perProductToday.filter((s) => s.totalSold > 0 || s.totalAdded > 0);
+    }
+
+    return perProductAll
+      .map(({ product, rows }) => {
+        const filtered = rows.filter((row) => {
+          if (dateFilterType === "day") return row.date === selectedDay;
+          if (dateFilterType === "week") {
+            const range = getWeekRange(selectedWeek);
+            if (!range) return true;
+            return row.date >= range.start && row.date <= range.end;
+          }
+          if (dateFilterType === "month") return String(row.date || "").startsWith(selectedMonth);
+          return true; // "recent" – include all
+        });
+        const totalSold       = filtered.reduce((s, r) => s + Number(r.sold_kg        || 0), 0);
+        const totalAdded      = filtered.reduce((s, r) => s + Number(r.added_kg       || 0), 0);
+        const totalMoney      = filtered.reduce((s, r) => s + Number(r.money_amount   || 0), 0);
+        const totalPaid       = filtered.reduce((s, r) => s + Number(r.paid_amount    || 0), 0);
+        const totalBalance    = filtered.reduce((s, r) => s + Number(r.balance_amount || 0), 0);
+        const totalSaleAmount = filtered.reduce((s, r) => s + Number(r.total_amount   || 0), 0);
+        return { product, totalSold, totalAdded, totalMoney, totalPaid, totalBalance, totalSaleAmount };
+      })
+      .filter((s) => s.totalSold > 0 || s.totalAdded > 0);
+  }, [
+    selectedProductId,
+    dateFilterType,
+    perProductToday,
+    perProductAll,
+    selectedDay,
+    selectedWeek,
+    selectedMonth,
+  ]);
 
   const displayTitle =
     selectedProductId === "overall"
@@ -211,7 +281,6 @@ export default function DailySalesHistory() {
             className="w-full rounded-2xl border border-green-200 bg-white px-4 py-3 font-bold text-slate-800 shadow-sm outline-none transition-colors focus:border-green-600 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
           >
             <option value="overall">គ្រប់ប្រភេទ និងលេខទាំងអស់</option>
-
             {products.map((product) => (
               <option key={product.id} value={product.id}>
                 {getProductKhmerName(product)}
@@ -261,27 +330,47 @@ export default function DailySalesHistory() {
       </section>
 
       <section className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <Card title="លក់សរុប" value={formatKg(summary.totalSold)} note="ចំនួនគីឡូដែលបានលក់" />
+        {/* ── លក់សរុប ── with per-product breakdown */}
+        <BreakdownCard
+          title="លក់សរុប"
+          value={formatKg(summary.totalSold)}
+          items={perProductSummaries}
+          valueKey="sold"
+          showMoney
+          tone="green"
+        />
 
-        <Card
+        {/* ── បន្ថែមស្តុក ── with per-product breakdown */}
+        <BreakdownCard
           title="បន្ថែមស្តុក"
           value={formatKg(summary.totalAdded)}
-          note="ស្តុកដែលបានបញ្ចូល"
+          items={perProductSummaries}
+          valueKey="added"
           tone="yellow"
         />
 
-        <Card
+        <BreakdownCard
           title="ចំណូលលក់ថ្ងៃនេះ"
           value={formatRiel(summary.totalMoney)}
-          note={
-            `បានទូទាត់ ${formatRiel(summary.totalPaid)} | នៅជំពាក់ ${formatRiel(summary.totalBalance)} | លក់សរុប ${formatRiel(summary.totalSaleAmount)}`
-          }
+          items={[]}
+          valueKey="money"
+          details={[
+            { label: "បានទូទាត់", value: formatRiel(summary.totalPaid) },
+            { label: "នៅជំពាក់",  value: formatRiel(summary.totalBalance) },
+            { label: "លក់សរុប",   value: formatRiel(summary.totalSaleAmount) },
+          ]}
         />
 
-        <Card
+        <BreakdownCard
           title="វិក្កយបត្រ"
           value={summary.totalInvoices}
-          note={`បង្ហាញ ${visibleRows.length} ថ្ងៃ / មាន ${filteredRows.length} ថ្ងៃ`}
+          items={[]}
+          valueKey="invoice"
+          details={[
+            { label: "បានទូទាត់ពេញ", value: `${summary.paidInvoices} វិក្កយបត្រ` },
+            { label: "បញ្ញើមុន",      value: `${summary.depositInvoices} វិក្កយបត្រ` },
+            { label: "មិនទាន់បង់",   value: `${summary.unpaidInvoices} វិក្កយបត្រ` },
+          ]}
         />
       </section>
 
@@ -291,7 +380,6 @@ export default function DailySalesHistory() {
             <h2 className="text-xl font-black text-slate-950 dark:text-white">
               តារាងប្រវត្តិប្រចាំថ្ងៃ
             </h2>
-
             <p className="mt-1 text-sm font-semibold text-slate-500 dark:text-slate-400">
               {dateFilterType === "today"
                 ? "កំពុងបង្ហាញប្រវត្តិថ្ងៃនេះ"
@@ -320,9 +408,7 @@ export default function DailySalesHistory() {
         )}
 
         {error ? (
-          <div className="py-8 text-center font-bold text-red-600 dark:text-red-400">
-            {error}
-          </div>
+          <div className="py-8 text-center font-bold text-red-600 dark:text-red-400">{error}</div>
         ) : loading ? (
           <div className="py-8 text-center font-bold text-slate-500 dark:text-slate-400">
             កំពុងទាញយកទិន្នន័យ...
@@ -343,7 +429,6 @@ export default function DailySalesHistory() {
                     <th className="py-3 text-right">ចំនួនប្រាក់</th>
                   </tr>
                 </thead>
-
                 <tbody>
                   {visibleRows.length > 0 ? (
                     visibleRows.map((row) => <DailyRow key={row.date} row={row} />)
@@ -376,7 +461,6 @@ export default function DailySalesHistory() {
                 <p className="text-sm font-bold text-slate-500 dark:text-slate-400">
                   បង្ហាញ {visibleRows.length} / {filteredRows.length} ថ្ងៃ
                 </p>
-
                 <button
                   type="button"
                   onClick={() => setVisibleDays((prev) => prev + LOAD_MORE_DAYS)}
@@ -393,6 +477,111 @@ export default function DailySalesHistory() {
   );
 }
 
+// ─── BreakdownCard ────────────────────────────────────────────────────────────
+// Shows total value + per-product/grade breakdown list (sold | added | money).
+// Also accepts an optional `details` array of {label, value} for extra stacked rows.
+function BreakdownCard({ title, value, items = [], valueKey, details = [], showMoney = false, tone = "green" }) {
+  const toneClass =
+    tone === "yellow"
+      ? "border-yellow-200 bg-[#fff6ce] dark:border-yellow-700/60 dark:bg-yellow-950/30"
+      : "border-green-200 bg-[#f8fff8] dark:border-green-800/70 dark:bg-green-950/20";
+
+  const dotClass =
+    tone === "yellow"
+      ? "bg-yellow-400 dark:bg-yellow-500"
+      : "bg-green-500 dark:bg-green-400";
+
+  const activeItems = items.filter((s) => {
+    if (valueKey === "sold")  return s.totalSold  > 0;
+    if (valueKey === "added") return s.totalAdded > 0;
+    if (valueKey === "money") return s.totalMoney > 0;
+    return false;
+  });
+
+  const getValue = (s) => {
+    if (valueKey === "sold")  return formatKg(s.totalSold);
+    if (valueKey === "added") return formatKg(s.totalAdded);
+    if (valueKey === "money") return formatRiel(s.totalMoney);
+    return "-";
+  };
+
+  const hasBreakdown = activeItems.length > 0;
+  const hasDetails   = details.length > 0;
+
+  return (
+    <div className={`rounded-[18px] border p-5 shadow-sm ${toneClass}`}>
+      <p className="text-base font-black text-slate-600 dark:text-slate-300">{title}</p>
+
+      <h3 className="mt-4 break-words text-2xl font-black text-slate-950 dark:text-white md:text-3xl">
+        {value}
+      </h3>
+
+      {/* Per-product breakdown */}
+      {hasBreakdown && (
+        <div className="mt-4 space-y-2 border-t border-black/10 pt-3 dark:border-white/10">
+          {activeItems.map((s) => (
+            <div key={s.product.id} className="flex items-start justify-between gap-2">
+              <div className="flex min-w-0 items-center gap-1.5">
+                <span className={`mt-1 h-1.5 w-1.5 flex-shrink-0 rounded-full ${dotClass}`} />
+                <span className="truncate text-sm font-semibold text-slate-500 dark:text-slate-400">
+                  {getProductKhmerName(s.product)}
+                </span>
+              </div>
+              <span className="flex-shrink-0 text-sm font-black text-slate-800 dark:text-slate-100">
+                {getValue(s)}{showMoney && s.totalMoney > 0 ? ` = ${formatRiel(s.totalMoney)}` : ""}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Stacked detail rows (paid / balance / sale total etc.) */}
+      {hasDetails && (
+        <div className={`space-y-2 border-t border-black/10 pt-3 dark:border-white/10 ${hasBreakdown ? "mt-3" : "mt-4"}`}>
+          {details.map(({ label, value: dVal }) => (
+            <div key={label} className="flex items-center justify-between gap-2">
+              <span className="text-sm font-semibold text-slate-500 dark:text-slate-400">
+                {label}
+              </span>
+              <span className="flex-shrink-0 text-sm font-black text-slate-700 dark:text-slate-200">
+                {dVal}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Fallback note when no breakdown available (single-product mode) */}
+      {!hasBreakdown && !hasDetails && items.length === 0 && (
+        <p className="mt-3 text-xs font-semibold text-slate-400 dark:text-slate-500">
+          {valueKey === "sold"  ? "ចំនួនគីឡូដែលបានលក់"
+           : valueKey === "added" ? "ស្តុកដែលបានបញ្ចូល"
+           : ""}
+        </p>
+      )}
+    </div>
+  );
+}
+
+// ─── Original Card (for money / invoice cards) ────────────────────────────────
+function Card({ title, value, note, tone = "green" }) {
+  const toneClass =
+    tone === "yellow"
+      ? "border-yellow-200 bg-[#fff6ce] dark:border-yellow-700/60 dark:bg-yellow-950/30"
+      : "border-green-200 bg-[#f8fff8] dark:border-green-800/70 dark:bg-green-950/20";
+
+  return (
+    <div className={`rounded-[18px] border p-5 shadow-sm ${toneClass}`}>
+      <p className="text-base font-black text-slate-600 dark:text-slate-300">{title}</p>
+      <h3 className="mt-4 break-words text-2xl font-black text-slate-950 dark:text-white md:text-3xl">
+        {value}
+      </h3>
+      <p className="mt-2 text-sm font-semibold text-slate-500 dark:text-slate-400">{note}</p>
+    </div>
+  );
+}
+
+// ─── Table row ────────────────────────────────────────────────────────────────
 function DailyRow({ row }) {
   return (
     <tr className="border-b border-green-100 last:border-b-0 dark:border-slate-800">
@@ -418,6 +607,7 @@ function DailyRow({ row }) {
   );
 }
 
+// ─── Mobile card ──────────────────────────────────────────────────────────────
 function DailyMobileCard({ row }) {
   return (
     <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-950">
@@ -428,7 +618,6 @@ function DailyMobileCard({ row }) {
             {row.product_count ? `${row.product_count} មុខទំនិញ` : row.product_name || "-"}
           </p>
         </div>
-
         <div className="rounded-xl bg-green-100 px-3 py-2 text-sm font-black text-green-700 dark:bg-green-950/40 dark:text-green-300">
           {row.invoice_count} វិក្កយបត្រ
         </div>
@@ -476,23 +665,7 @@ function MoneyBox({ label, value, green, red }) {
   );
 }
 
-function Card({ title, value, note, tone = "green" }) {
-  const toneClass =
-    tone === "yellow"
-      ? "border-yellow-200 bg-[#fff6ce] dark:border-yellow-700/60 dark:bg-yellow-950/30"
-      : "border-green-200 bg-[#f8fff8] dark:border-green-800/70 dark:bg-green-950/20";
-
-  return (
-    <div className={`rounded-[18px] border p-5 shadow-sm ${toneClass}`}>
-      <p className="text-base font-black text-slate-600 dark:text-slate-300">{title}</p>
-      <h3 className="mt-4 break-words text-2xl font-black text-slate-950 dark:text-white md:text-3xl">
-        {value}
-      </h3>
-      <p className="mt-2 text-sm font-semibold text-slate-500 dark:text-slate-400">{note}</p>
-    </div>
-  );
-}
-
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 function sortRowsNewest(rows) {
   return [...(rows || [])].sort((a, b) => new Date(b.date) - new Date(a.date));
 }
@@ -537,28 +710,22 @@ function getCurrentWeekValue() {
 
 function getWeekRange(weekValue) {
   if (!weekValue || !weekValue.includes("-W")) return null;
-
   const [yearText, weekText] = weekValue.split("-W");
   const year = Number(yearText);
   const week = Number(weekText);
-
   if (!year || !week) return null;
-
   const simple = new Date(Date.UTC(year, 0, 1 + (week - 1) * 7));
   const dayOfWeek = simple.getUTCDay();
   const isoWeekStart = simple;
-
   if (dayOfWeek <= 4) {
     isoWeekStart.setUTCDate(simple.getUTCDate() - simple.getUTCDay() + 1);
   } else {
     isoWeekStart.setUTCDate(simple.getUTCDate() + 8 - simple.getUTCDay());
   }
-
   const start = formatInputDate(isoWeekStart);
   const endDate = new Date(isoWeekStart);
   endDate.setUTCDate(isoWeekStart.getUTCDate() + 6);
   const end = formatInputDate(endDate);
-
   return { start, end };
 }
 
