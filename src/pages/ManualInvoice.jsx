@@ -576,6 +576,10 @@ export default function ManualInvoice() {
                     onChange={(e) =>
                       setPaymentForm({ ...paymentForm, amount: e.target.value })
                     }
+                    onKeyDown={(e) => {
+                      if (e.key === "ArrowUp" || e.key === "ArrowDown") e.preventDefault();
+                    }}
+                    onWheel={(e) => e.target.blur()}
                     className="input-ui"
                     required
                   />
@@ -945,6 +949,10 @@ function PreviewSummary({ form, total, paid, balance, status, onPaidChange, onRe
               type="number"
               value={form.paid_amount}
               onChange={(e) => onPaidChange(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "ArrowUp" || e.key === "ArrowDown") e.preventDefault();
+              }}
+              onWheel={(e) => e.target.blur()}
               className="input-ui"
               placeholder="0"
             />
@@ -1008,6 +1016,10 @@ function MobileSummary({ total, paid, balance, status, onPaidChange, onReset, lo
               type="number"
               value={paid}
               onChange={(e) => onPaidChange(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "ArrowUp" || e.key === "ArrowDown") e.preventDefault();
+              }}
+              onWheel={(e) => e.target.blur()}
               className="input-ui"
               placeholder="0"
             />
@@ -1556,6 +1568,10 @@ function ItemsCard({ items, updateItem, addItem, removeItem, inModal }) {
                       value={item.quantity_kg}
                       onChange={(e) => updateItem(index, "quantity_kg", e.target.value)}
                       onKeyDownCapture={(e) => handleItemEnter(e, index)}
+                      onKeyDown={(e) => {
+                        if (e.key === "ArrowUp" || e.key === "ArrowDown") e.preventDefault();
+                      }}
+                      onWheel={(e) => e.target.blur()}
                       className="input-ui text-right"
                     />
                   </td>
@@ -1566,6 +1582,10 @@ function ItemsCard({ items, updateItem, addItem, removeItem, inModal }) {
                       value={item.price_per_kg}
                       onChange={(e) => updateItem(index, "price_per_kg", e.target.value)}
                       onKeyDownCapture={(e) => handleItemEnter(e, index)}
+                      onKeyDown={(e) => {
+                        if (e.key === "ArrowUp" || e.key === "ArrowDown") e.preventDefault();
+                      }}
+                      onWheel={(e) => e.target.blur()}
                       className="input-ui text-right"
                     />
                   </td>
@@ -1632,6 +1652,10 @@ function ItemsCard({ items, updateItem, addItem, removeItem, inModal }) {
                       value={item.quantity_kg}
                       onChange={(e) => updateItem(index, "quantity_kg", e.target.value)}
                       onKeyDownCapture={(e) => handleItemEnter(e, index)}
+                      onKeyDown={(e) => {
+                        if (e.key === "ArrowUp" || e.key === "ArrowDown") e.preventDefault();
+                      }}
+                      onWheel={(e) => e.target.blur()}
                       className="input-ui"
                     />
                   </InputBlock>
@@ -1642,6 +1666,10 @@ function ItemsCard({ items, updateItem, addItem, removeItem, inModal }) {
                       value={item.price_per_kg}
                       onChange={(e) => updateItem(index, "price_per_kg", e.target.value)}
                       onKeyDownCapture={(e) => handleItemEnter(e, index)}
+                      onKeyDown={(e) => {
+                        if (e.key === "ArrowUp" || e.key === "ArrowDown") e.preventDefault();
+                      }}
+                      onWheel={(e) => e.target.blur()}
                       className="input-ui"
                     />
                   </InputBlock>

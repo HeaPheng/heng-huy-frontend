@@ -1143,6 +1143,12 @@ export default function Stock() {
                   required
                   value={form.quantity}
                   onChange={(e) => updateForm("quantity", e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+                      e.preventDefault();
+                    }
+                  }}
+                  onWheel={(e) => e.target.blur()}
                   placeholder="0"
                 />
                 <select value={form.unit} onChange={(e) => updateForm("unit", e.target.value)}>
@@ -1167,6 +1173,12 @@ export default function Stock() {
                 min="0"
                 value={form.buying_price_per_kg}
                 onChange={(e) => updateForm("buying_price_per_kg", e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+                    e.preventDefault();
+                  }
+                }}
+                onWheel={(e) => e.target.blur()}
                 placeholder="0"
               />
             </Field>
