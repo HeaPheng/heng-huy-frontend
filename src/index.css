@@ -35,3 +35,25 @@ input[type="number"] {
 .no-scrollbar::-webkit-scrollbar {
   display: none;
 }
+
+/* Fix mobile date picker UX/UI issues (weird width and hidden text) */
+@media (max-width: 640px) {
+  input[type="date"],
+  input[type="week"],
+  input[type="month"] {
+    min-width: 0 !important;
+    width: 100% !important;
+    min-height: 48px !important;
+    padding-left: 8px !important;
+    padding-right: 8px !important;
+    text-align: center !important;
+    box-sizing: border-box !important;
+  }
+
+  input[type="date"]::-webkit-date-and-time-value,
+  input[type="week"]::-webkit-date-and-time-value,
+  input[type="month"]::-webkit-date-and-time-value {
+    text-align: center !important;
+    min-width: 0 !important;
+  }
+}
