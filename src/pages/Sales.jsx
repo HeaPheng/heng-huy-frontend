@@ -693,7 +693,20 @@ export default function Sales() {
       });
     });
 
-    const shortNo = `MG-${String(Date.now()).slice(-4)}`;
+    // Build a combined invoice number from the source invoices' numeric suffixes
+    // e.g. INV-0001 + INV-0002 → MG-01-02
+    const shortNo = (() => {
+      const nums = selectedSales.map((sale) => {
+        const match = sale.invoice_no?.match(/(\d+)$/);
+        if (match) {
+          // Take last 2 digits, pad to 2
+          const full = match[1];
+          return full.length >= 2 ? full.slice(-2) : full.padStart(2, "0");
+        }
+        return "00";
+      });
+      return `MG-${nums.join("-")}`;
+    })();
 
     return {
       id: `merged-${Date.now()}`,

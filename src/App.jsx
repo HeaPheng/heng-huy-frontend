@@ -17,6 +17,7 @@ import Login from "./pages/Login";
 import Tasks from "./pages/Tasks";
 import Backup from "./pages/Backup"
 import Staff from "./pages/Staff"
+import ImageGallery from "./pages/ImageGallery"
 import api from "./api";
 
 export default function App() {
@@ -116,6 +117,7 @@ export default function App() {
           <Route path="/tasks" element={<ProtectedRoute isLoggedIn={isLoggedIn} allowRoles={["admin"]}><Tasks /></ProtectedRoute>} />
           <Route path="/backup" element={<ProtectedRoute isLoggedIn={isLoggedIn} allowRoles={["admin"]}><Backup /></ProtectedRoute>} />
           <Route path="/staff" element={<ProtectedRoute isLoggedIn={isLoggedIn} allowRoles={["admin"]}><Staff /></ProtectedRoute>} />
+          <Route path="/images" element={<ProtectedRoute isLoggedIn={isLoggedIn} allowRoles={["admin"]}><ImageGallery /></ProtectedRoute>} />
         </Routes>
       </main>
     </div>
@@ -155,12 +157,13 @@ function DesktopMiniSidebar({ user, darkMode, toggleTheme, setMenuOpen }) {
         {isAdmin && (
           <>
             <MiniLink to="/stock" icon="🥔" label="ស្តុក" />
-            <MiniLink to="/sales" icon="📄" label="វិក្កយបត្រទាំងអស់" />
+            <MiniLink to="/sales" icon="🧾" label="វិក្កយបត្រទាំងអស់" />
             <MiniLink to="/daily-history" icon="📅" label="ប្រចាំថ្ងៃ" />
             <MiniLink to="/statements" icon="📑" label="របាយការណ៍" />
             <MiniLink to="/staff" icon="👥" label="ប្រាក់ខែបុគ្គលិក" />
             <MiniLink to="/tasks" icon="✅" label="កំណត់ចំណាំ" />
             <MiniLink to="/backup" icon="🔄" label="backup" />
+            <MiniLink to="/images" icon="🖼️" label="រូបភាព" />
           </>
         )}
       </div>
@@ -301,7 +304,7 @@ function Sidebar({
                     ស្តុក
                   </DrawerLink>
 
-                  <DrawerLink to="/sales" icon="📄" close={() => setMenuOpen(false)}>
+                  <DrawerLink to="/sales" icon="🧾" close={() => setMenuOpen(false)}>
                     វិក្កយបត្រទាំងអស់
                   </DrawerLink>
 
@@ -323,6 +326,10 @@ function Sidebar({
 
                   <DrawerLink to="/backup" icon="🔄" close={() => setMenuOpen(false)}>
                     Backup
+                  </DrawerLink>
+
+                  <DrawerLink to="/images" icon="🖼️" close={() => setMenuOpen(false)}>
+                    រូបភាព
                   </DrawerLink>
                 </>
               )}

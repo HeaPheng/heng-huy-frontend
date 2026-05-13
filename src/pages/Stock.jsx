@@ -20,6 +20,12 @@ function formatRielPerKg(value) {
   return `${Number(value || 0).toLocaleString()} រៀល/គីឡូ`;
 }
 
+function formatRiel(value) {
+  return `${Number(value || 0).toLocaleString()} រៀល`;
+}
+
+const DELIVERY_PRICE_OPTIONS = [90, 100, 120, 140];
+
 function today() {
   return new Date().toISOString().slice(0, 10);
 }
@@ -71,6 +77,7 @@ export default function Stock() {
 
   const [filters, setFilters] = useState({
     supplier: "all",
+    driver: "all",
     startDate: "",
     endDate: "",
   });
@@ -82,6 +89,9 @@ export default function Stock() {
     unit: "kg",
     supplier: "",
     buying_price_per_kg: "",
+    delivery_price_per_kg: "",
+    driver_name: "",
+    delivery_status: "unpaid",
     note: "",
   };
 
@@ -139,6 +149,7 @@ export default function Stock() {
 
     setFilters({
       supplier: "all",
+      driver: "all",
       startDate: "",
       endDate: "",
     });
@@ -177,6 +188,7 @@ export default function Stock() {
   function resetFilters() {
     setFilters({
       supplier: "all",
+      driver: "all",
       startDate: "",
       endDate: "",
     });
@@ -193,6 +205,9 @@ export default function Stock() {
       unit: qty.unit,
       supplier: entry.supplier || "",
       buying_price_per_kg: entry.buying_price_per_kg || "",
+      delivery_price_per_kg: entry.delivery_price_per_kg || "",
+      driver_name: entry.driver_name || "",
+      delivery_status: entry.delivery_status || "unpaid",
       note: entry.note || "",
     });
 
@@ -217,14 +232,19 @@ export default function Stock() {
 
     setLoading(true);
 
+    const quantityNum = Number(form.quantity || 0);
+
     const payload = {
       product_id: activeProduct.id,
       date: form.date,
       type: form.type,
-      quantity: Number(form.quantity),
+      quantity: quantityNum,
       unit: form.unit,
       buying_price_per_kg: Number(form.buying_price_per_kg || 0),
+      delivery_price_per_kg: Number(form.delivery_price_per_kg || 0),
       supplier: form.supplier,
+      driver_name: form.driver_name,
+      delivery_status: form.delivery_status,
       note: form.note,
     };
 
@@ -283,18 +303,32 @@ export default function Stock() {
     );
   }, [entries]);
 
+  const drivers = useMemo(() => {
+    const driverNames = entries
+      .map((entry) => entry.driver_name?.trim())
+      .filter(Boolean);
+
+    return Array.from(new Set(driverNames)).sort((a, b) =>
+      a.localeCompare(b)
+    );
+  }, [entries]);
+
   const filteredEntries = useMemo(() => {
     return entries.filter((entry) => {
       const supplierMatch =
         filters.supplier === "all" ||
         (entry.supplier || "").trim() === filters.supplier;
 
+      const driverMatch =
+        filters.driver === "all" ||
+        (entry.driver_name || "").trim() === filters.driver;
+
       const dateValue = entry.date ? entry.date.slice(0, 10) : "";
 
       const startMatch = !filters.startDate || dateValue >= filters.startDate;
       const endMatch = !filters.endDate || dateValue <= filters.endDate;
 
-      return supplierMatch && startMatch && endMatch;
+      return supplierMatch && driverMatch && startMatch && endMatch;
     });
   }, [entries, filters]);
 
@@ -552,7 +586,7 @@ export default function Stock() {
 
         .filter-grid {
           display: grid;
-          grid-template-columns: 1.2fr 1fr 1fr;
+          grid-template-columns: 1fr 1fr 1fr 1fr;
           gap: 18px;
           margin-bottom: 20px;
         }
@@ -1058,6 +1092,47 @@ export default function Stock() {
         }
       `}</style>
 
+      <style>{`
+        .delivery-status-tabs {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 8px;
+          height: 48px;
+        }
+
+        .delivery-status-btn {
+          border: 1px solid #d6ead8;
+          background: white;
+          color: #0f172a;
+          border-radius: 12px;
+          font-weight: 800;
+          font-size: 14px;
+          cursor: pointer;
+          transition: all 0.2s ease;
+          padding: 0;
+        }
+
+        html.dark .delivery-status-btn {
+          border-color: #334155;
+          background: #0f172a;
+          color: #e2e8f0;
+        }
+
+        .delivery-status-btn.active-paid {
+          background: #16a34a !important;
+          color: white !important;
+          border-color: #16a34a !important;
+          box-shadow: 0 6px 16px rgba(22, 163, 74, 0.25);
+        }
+
+        .delivery-status-btn.active-unpaid {
+          background: #dc2626 !important;
+          color: white !important;
+          border-color: #dc2626 !important;
+          box-shadow: 0 6px 16px rgba(220, 38, 38, 0.22);
+        }
+      `}</style>
+
       <section className="stock-wrap">
         <div className="stock-header">
           <div className="stock-title">
@@ -1183,13 +1258,84 @@ export default function Stock() {
               />
             </Field>
 
-            <Field label={form.type === "clear" ? "មូលហេតុដកស្តុក" : "ចំណាំ"} className="note-field">
+            <Field label="ថ្លៃដឹកជញ្ជូន / គីឡូ">
+              <div className="qty-row">
+                <input
+                  type="number"
+                  step="1"
+                  min="0"
+                  value={form.delivery_price_per_kg}
+                  onChange={(e) => updateForm("delivery_price_per_kg", e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+                      e.preventDefault();
+                    }
+                  }}
+                  onWheel={(e) => e.target.blur()}
+                  placeholder="0"
+                />
+                <select
+                  value={form.delivery_price_per_kg}
+                  onChange={(e) => updateForm("delivery_price_per_kg", e.target.value)}
+                >
+                  <option value="">ជ្រើស</option>
+                  {DELIVERY_PRICE_OPTIONS.map((price) => (
+                    <option key={price} value={price}>
+                      {price.toLocaleString()}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              {Number(form.delivery_price_per_kg) > 0 && Number(form.quantity) > 0 && (
+                <small style={{
+                  display: "block",
+                  marginTop: 6,
+                  fontSize: 13,
+                  fontWeight: 700,
+                  color: "#0369a1",
+                }}>
+                  សរុបថ្លៃដឹក = {(
+                    Number(form.delivery_price_per_kg) *
+                    (form.unit === "ton" ? Number(form.quantity) * 1000 : Number(form.quantity))
+                  ).toLocaleString()} រៀល
+                </small>
+              )}
+            </Field>
+
+            <Field label={form.type === "clear" ? "មូលហេតុដកស្តុក" : "ចំណាំ"}>
               <input
                 value={form.note}
                 required={form.type === "clear"}
                 onChange={(e) => updateForm("note", e.target.value)}
                 placeholder={form.type === "clear" ? "ឧ. ខូចគុណភាព / បាត់បង់ / ស្ងួតខូច" : "មិនចាំបាច់បញ្ចូល"}
               />
+            </Field>
+
+            <Field label="អ្នកបើកបរ">
+              <input
+                value={form.driver_name}
+                onChange={(e) => updateForm("driver_name", e.target.value)}
+                placeholder="ឈ្មោះអ្នកបើកបរ"
+              />
+            </Field>
+
+            <Field label="ស្ថានភាពថ្លៃដឹក">
+              <div className="delivery-status-tabs">
+                <button
+                  type="button"
+                  onClick={() => updateForm("delivery_status", "paid")}
+                  className={`delivery-status-btn ${form.delivery_status === "paid" ? "active-paid" : ""}`}
+                >
+                  បានបង់
+                </button>
+                <button
+                  type="button"
+                  onClick={() => updateForm("delivery_status", "unpaid")}
+                  className={`delivery-status-btn ${form.delivery_status === "unpaid" ? "active-unpaid" : ""}`}
+                >
+                  មិនទាន់បង់
+                </button>
+              </div>
             </Field>
           </div>
 
@@ -1236,6 +1382,17 @@ export default function Stock() {
                 {suppliers.map((supplier) => (
                   <option key={supplier} value={supplier}>
                     {supplier}
+                  </option>
+                ))}
+              </select>
+            </Field>
+
+            <Field label="ជ្រើសអ្នកបើកបរ">
+              <select value={filters.driver} onChange={(e) => updateFilter("driver", e.target.value)}>
+                <option value="all">ទាំងអស់</option>
+                {drivers.map((driver) => (
+                  <option key={driver} value={driver}>
+                    {driver}
                   </option>
                 ))}
               </select>
@@ -1291,6 +1448,10 @@ export default function Stock() {
                   <th>អ្នកផ្គត់ផ្គង់</th>
                   <th>បរិមាណ</th>
                   <th>តម្លៃទិញ</th>
+                  <th>ថ្លៃដឹក/គីឡូ</th>
+                  <th>សរុបថ្លៃដឹក</th>
+                  <th>អ្នកបើកបរ</th>
+                  <th>ស្ថានភាព</th>
                   <th>ចំណាំ</th>
                   <th style={{ textAlign: "right" }}>សកម្មភាព</th>
                 </tr>
@@ -1310,6 +1471,14 @@ export default function Stock() {
                       {signedKg(entry)}
                     </td>
                     <td>{formatRielPerKg(entry.buying_price_per_kg)}</td>
+                    <td>{formatRielPerKg(entry.delivery_price_per_kg)}</td>
+                    <td>{formatRiel(entry.delivery_total)}</td>
+                    <td>{entry.driver_name || "—"}</td>
+                    <td>
+                      <span className={`stock-type-badge ${entry.delivery_status === "paid" ? "add" : "clear"}`}>
+                        {entry.delivery_status === "paid" ? "បានបង់" : "មិនទាន់បង់"}
+                      </span>
+                    </td>
                     <td className="muted">{entry.note || "—"}</td>
                     <td>
                       <div className="row-actions">
@@ -1326,7 +1495,7 @@ export default function Stock() {
 
                 {filteredEntries.length === 0 && (
                   <tr>
-                    <td colSpan="7" style={{ textAlign: "center", padding: 30 }}>
+                    <td colSpan="11" style={{ textAlign: "center", padding: 30 }}>
                       មិនមានប្រវត្តិស្តុកត្រូវនឹង Filter នេះទេ។
                     </td>
                   </tr>
@@ -1358,6 +1527,34 @@ export default function Stock() {
                   <div>
                     <span>តម្លៃទិញ</span>
                     <strong>{formatRielPerKg(entry.buying_price_per_kg)}</strong>
+                  </div>
+                </div>
+
+                <div className="stock-history-info" style={{ marginTop: 0 }}>
+                  <div>
+                    <span>ថ្លៃដឹក/គីឡូ</span>
+                    <strong>{formatRielPerKg(entry.delivery_price_per_kg)}</strong>
+                  </div>
+
+                  <div>
+                    <span>សរុបថ្លៃដឹក</span>
+                    <strong>{formatRiel(entry.delivery_total)}</strong>
+                  </div>
+                </div>
+
+                <div className="stock-history-info" style={{ marginTop: 0 }}>
+                  <div>
+                    <span>អ្នកបើកបរ</span>
+                    <strong>{entry.driver_name || "—"}</strong>
+                  </div>
+
+                  <div>
+                    <span>ស្ថានភាព</span>
+                    <strong>
+                      <span className={`stock-type-badge ${entry.delivery_status === "paid" ? "add" : "clear"}`} style={{ fontSize: 12, padding: "4px 10px" }}>
+                        {entry.delivery_status === "paid" ? "បានបង់" : "មិនទាន់បង់"}
+                      </span>
+                    </strong>
                   </div>
                 </div>
 
