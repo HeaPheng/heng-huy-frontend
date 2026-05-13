@@ -638,9 +638,8 @@ export default function ImageGallery() {
   };
 
   function getImageUrl(img) {
-    if (img.url) return img.url.startsWith("http") ? img.url : `${API_BASE}${img.url}`;
-    if (img.path) return `${API_BASE}/storage/${img.path}`;
-    return "";
+    if (!img || !img.id) return "";
+    return `${API_BASE}/api/images/${img.id}/file`;
   }
 
   function formatDate(dateString) {
