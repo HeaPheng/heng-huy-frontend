@@ -106,6 +106,7 @@ export default function DailySalesHistory() {
           product,
           totalSold:       pRows.reduce((s, r) => s + Number(r.sold_kg      || 0), 0),
           totalAdded:      pRows.reduce((s, r) => s + Number(r.added_kg     || 0), 0),
+          totalCleared:    pRows.reduce((s, r) => s + Number(r.cleared_kg   || 0), 0),
           totalMoney:      pRows.reduce((s, r) => s + Number(r.money_amount || 0), 0),
           totalPaid:       pRows.reduce((s, r) => s + Number(r.paid_amount  || 0), 0),
           totalBalance:    pRows.reduce((s, r) => s + Number(r.balance_amount || 0), 0),
@@ -187,6 +188,7 @@ export default function DailySalesHistory() {
       (acc, row) => {
         acc.totalSold        += Number(row.sold_kg             || 0);
         acc.totalAdded       += Number(row.added_kg            || 0);
+        acc.totalCleared     += Number(row.cleared_kg          || 0);
         acc.totalMoney       += Number(row.money_amount        || 0);
         acc.totalPaid        += Number(row.paid_amount         || 0);
         acc.totalBalance     += Number(row.balance_amount      || 0);
@@ -200,7 +202,7 @@ export default function DailySalesHistory() {
         return acc;
       },
       {
-        totalSold: 0, totalAdded: 0, totalMoney: 0, totalPaid: 0,
+        totalSold: 0, totalAdded: 0, totalCleared: 0, totalMoney: 0, totalPaid: 0,
         totalBalance: 0, totalSaleAmount: 0, totalInvoices: 0,
         totalOpening: 0, totalClosing: 0,
         paidInvoices: 0, depositInvoices: 0, unpaidInvoices: 0,
@@ -230,11 +232,12 @@ export default function DailySalesHistory() {
         });
         const totalSold       = filtered.reduce((s, r) => s + Number(r.sold_kg        || 0), 0);
         const totalAdded      = filtered.reduce((s, r) => s + Number(r.added_kg       || 0), 0);
+        const totalCleared    = filtered.reduce((s, r) => s + Number(r.cleared_kg     || 0), 0);
         const totalMoney      = filtered.reduce((s, r) => s + Number(r.money_amount   || 0), 0);
         const totalPaid       = filtered.reduce((s, r) => s + Number(r.paid_amount    || 0), 0);
         const totalBalance    = filtered.reduce((s, r) => s + Number(r.balance_amount || 0), 0);
         const totalSaleAmount = filtered.reduce((s, r) => s + Number(r.total_amount   || 0), 0);
-        return { product, totalSold, totalAdded, totalMoney, totalPaid, totalBalance, totalSaleAmount };
+        return { product, totalSold, totalAdded, totalCleared, totalMoney, totalPaid, totalBalance, totalSaleAmount };
       })
       .filter((s) => s.totalSold > 0 || s.totalAdded > 0);
   }, [
@@ -329,7 +332,7 @@ export default function DailySalesHistory() {
         </div>
       </section>
 
-      <section className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <section className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
         {/* ── លក់សរុប ── with per-product breakdown */}
         <BreakdownCard
           title="លក់សរុប"
@@ -347,6 +350,15 @@ export default function DailySalesHistory() {
           items={perProductSummaries}
           valueKey="added"
           tone="yellow"
+        />
+
+        {/* ── ដកស្តុក ── manual decrease breakdown */}
+        <BreakdownCard
+          title="ដកស្តុក"
+          value={formatKg(summary.totalCleared)}
+          items={perProductSummaries}
+          valueKey="cleared"
+          tone="red"
         />
 
         <BreakdownCard
@@ -422,6 +434,7 @@ export default function DailySalesHistory() {
                     <th className="py-3">កាលបរិច្ឆេទ</th>
                     <th className="py-3">ស្តុកដើមថ្ងៃ</th>
                     <th className="py-3">បន្ថែមស្តុក</th>
+                    <th className="py-3">ដកស្តុក</th>
                     <th className="py-3">លក់ចេញ</th>
                     <th className="py-3">ស្តុកចុងថ្ងៃ</th>
                     <th className="py-3">វិក្កយបត្រ</th>
@@ -435,7 +448,7 @@ export default function DailySalesHistory() {
                   ) : (
                     <tr>
                       <td
-                        colSpan="8"
+                       colSpan="9"
                         className="py-8 text-center font-bold text-slate-500 dark:text-slate-400"
                       >
                         មិនទាន់មានប្រវត្តិសម្រាប់ជម្រើសនេះទេ
@@ -484,24 +497,30 @@ function BreakdownCard({ title, value, items = [], valueKey, details = [], showM
   const toneClass =
     tone === "yellow"
       ? "border-yellow-200 bg-[#fff6ce] dark:border-yellow-700/60 dark:bg-yellow-950/30"
-      : "border-green-200 bg-[#f8fff8] dark:border-green-800/70 dark:bg-green-950/20";
+      : tone === "red"
+        ? "border-orange-200 bg-[#fff3ed] dark:border-orange-700/60 dark:bg-orange-950/30"
+        : "border-green-200 bg-[#f8fff8] dark:border-green-800/70 dark:bg-green-950/20";
 
   const dotClass =
     tone === "yellow"
       ? "bg-yellow-400 dark:bg-yellow-500"
-      : "bg-green-500 dark:bg-green-400";
+      : tone === "red"
+        ? "bg-orange-400 dark:bg-orange-500"
+        : "bg-green-500 dark:bg-green-400";
 
   const activeItems = items.filter((s) => {
-    if (valueKey === "sold")  return s.totalSold  > 0;
-    if (valueKey === "added") return s.totalAdded > 0;
-    if (valueKey === "money") return s.totalMoney > 0;
+    if (valueKey === "sold")    return s.totalSold    > 0;
+    if (valueKey === "added")   return s.totalAdded   > 0;
+    if (valueKey === "cleared") return s.totalCleared > 0;
+    if (valueKey === "money")   return s.totalMoney   > 0;
     return false;
   });
 
   const getValue = (s) => {
-    if (valueKey === "sold")  return formatKg(s.totalSold);
-    if (valueKey === "added") return formatKg(s.totalAdded);
-    if (valueKey === "money") return formatRiel(s.totalMoney);
+    if (valueKey === "sold")    return formatKg(s.totalSold);
+    if (valueKey === "added")   return formatKg(s.totalAdded);
+    if (valueKey === "cleared") return formatKg(s.totalCleared);
+    if (valueKey === "money")   return formatRiel(s.totalMoney);
     return "-";
   };
 
@@ -554,8 +573,9 @@ function BreakdownCard({ title, value, items = [], valueKey, details = [], showM
       {/* Fallback note when no breakdown available (single-product mode) */}
       {!hasBreakdown && !hasDetails && items.length === 0 && (
         <p className="mt-3 text-xs font-semibold text-slate-400 dark:text-slate-500">
-          {valueKey === "sold"  ? "ចំនួនគីឡូដែលបានលក់"
+          {valueKey === "sold"    ? "ចំនួនគីឡូដែលបានលក់"
            : valueKey === "added" ? "ស្តុកដែលបានបញ្ចូល"
+           : valueKey === "cleared" ? "ស្តុកដែលបានដកដោយដៃ"
            : ""}
         </p>
       )}
@@ -583,12 +603,16 @@ function Card({ title, value, note, tone = "green" }) {
 
 // ─── Table row ────────────────────────────────────────────────────────────────
 function DailyRow({ row }) {
+  const clearedKg = Number(row.cleared_kg || 0);
   return (
     <tr className="border-b border-green-100 last:border-b-0 dark:border-slate-800">
       <td className="py-3 font-bold text-slate-900 dark:text-white">{formatDate(row.date)}</td>
       <td className="py-3 text-slate-700 dark:text-slate-300">{formatKg(row.first_stock_kg)}</td>
       <td className="py-3 font-bold text-green-700 dark:text-green-400">
         + {formatKg(row.added_kg)}
+      </td>
+      <td className="py-3 font-bold text-orange-600 dark:text-orange-400">
+        {clearedKg > 0 ? `- ${formatKg(clearedKg)}` : "—"}
       </td>
       <td className="py-3 font-bold text-red-600 dark:text-red-400">
         - {formatKg(row.sold_kg)}
@@ -628,8 +652,9 @@ function DailyMobileCard({ row }) {
         <InfoBox label="ស្តុកចុងថ្ងៃ" value={formatKg(row.last_stock_kg)} />
       </div>
 
-      <div className="mt-3 grid grid-cols-3 overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-700">
+      <div className="mt-3 grid grid-cols-4 overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-700">
         <MoneyBox label="បន្ថែម" value={`+ ${formatKg(row.added_kg)}`} green />
+        <MoneyBox label="ដកស្តុក" value={Number(row.cleared_kg || 0) > 0 ? `- ${formatKg(row.cleared_kg)}` : "—"} orange />
         <MoneyBox label="លក់ចេញ" value={`- ${formatKg(row.sold_kg)}`} red />
         <MoneyBox label="ប្រាក់" value={formatRiel(row.money_amount)} />
       </div>
@@ -646,7 +671,7 @@ function InfoBox({ label, value }) {
   );
 }
 
-function MoneyBox({ label, value, green, red }) {
+function MoneyBox({ label, value, green, red, orange }) {
   return (
     <div className="border-r border-slate-200 bg-white p-3 last:border-r-0 dark:border-slate-700 dark:bg-slate-900">
       <p className="text-[11px] font-black text-slate-500 dark:text-slate-400">{label}</p>
@@ -656,7 +681,9 @@ function MoneyBox({ label, value, green, red }) {
             ? "text-green-700 dark:text-green-400"
             : red
               ? "text-red-700 dark:text-red-400"
-              : "text-slate-950 dark:text-white"
+              : orange
+                ? "text-orange-600 dark:text-orange-400"
+                : "text-slate-950 dark:text-white"
         }`}
       >
         {value}

@@ -74,6 +74,7 @@ export default function Stock() {
   const [editId, setEditId] = useState(null);
   const [deleteId, setDeleteId] = useState(null);
   const [visibleCount, setVisibleCount] = useState(5);
+  const [historyTab, setHistoryTab] = useState("all");
 
   const [filters, setFilters] = useState({
     supplier: "all",
@@ -315,6 +316,10 @@ export default function Stock() {
 
   const filteredEntries = useMemo(() => {
     return entries.filter((entry) => {
+      // Tab filter
+      if (historyTab === "add" && entry.type === "clear") return false;
+      if (historyTab === "clear" && entry.type !== "clear") return false;
+
       const supplierMatch =
         filters.supplier === "all" ||
         (entry.supplier || "").trim() === filters.supplier;
@@ -330,7 +335,7 @@ export default function Stock() {
 
       return supplierMatch && driverMatch && startMatch && endMatch;
     });
-  }, [entries, filters]);
+  }, [entries, filters, historyTab]);
 
   const visibleEntries = useMemo(() => {
     return filteredEntries.slice(0, visibleCount);
@@ -1241,67 +1246,6 @@ export default function Stock() {
               />
             </Field>
 
-            <Field label="តម្លៃទិញ / គីឡូ">
-              <input
-                type="number"
-                step="1"
-                min="0"
-                value={form.buying_price_per_kg}
-                onChange={(e) => updateForm("buying_price_per_kg", e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "ArrowUp" || e.key === "ArrowDown") {
-                    e.preventDefault();
-                  }
-                }}
-                onWheel={(e) => e.target.blur()}
-                placeholder="0"
-              />
-            </Field>
-
-            <Field label="ថ្លៃដឹកជញ្ជូន / គីឡូ">
-              <div className="qty-row">
-                <input
-                  type="number"
-                  step="1"
-                  min="0"
-                  value={form.delivery_price_per_kg}
-                  onChange={(e) => updateForm("delivery_price_per_kg", e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "ArrowUp" || e.key === "ArrowDown") {
-                      e.preventDefault();
-                    }
-                  }}
-                  onWheel={(e) => e.target.blur()}
-                  placeholder="0"
-                />
-                <select
-                  value={form.delivery_price_per_kg}
-                  onChange={(e) => updateForm("delivery_price_per_kg", e.target.value)}
-                >
-                  <option value="">ជ្រើស</option>
-                  {DELIVERY_PRICE_OPTIONS.map((price) => (
-                    <option key={price} value={price}>
-                      {price.toLocaleString()}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              {Number(form.delivery_price_per_kg) > 0 && Number(form.quantity) > 0 && (
-                <small style={{
-                  display: "block",
-                  marginTop: 6,
-                  fontSize: 13,
-                  fontWeight: 700,
-                  color: "#0369a1",
-                }}>
-                  សរុបថ្លៃដឹក = {(
-                    Number(form.delivery_price_per_kg) *
-                    (form.unit === "ton" ? Number(form.quantity) * 1000 : Number(form.quantity))
-                  ).toLocaleString()} រៀល
-                </small>
-              )}
-            </Field>
-
             <Field label={form.type === "clear" ? "មូលហេតុដកស្តុក" : "ចំណាំ"}>
               <input
                 value={form.note}
@@ -1311,32 +1255,97 @@ export default function Stock() {
               />
             </Field>
 
-            <Field label="អ្នកបើកបរ">
-              <input
-                value={form.driver_name}
-                onChange={(e) => updateForm("driver_name", e.target.value)}
-                placeholder="ឈ្មោះអ្នកបើកបរ"
-              />
-            </Field>
+            {form.type !== "clear" && (
+              <>
+                <Field label="តម្លៃទិញ / គីឡូ">
+                  <input
+                    type="number"
+                    step="1"
+                    min="0"
+                    value={form.buying_price_per_kg}
+                    onChange={(e) => updateForm("buying_price_per_kg", e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+                        e.preventDefault();
+                      }
+                    }}
+                    onWheel={(e) => e.target.blur()}
+                    placeholder="0"
+                  />
+                </Field>
 
-            <Field label="ស្ថានភាពថ្លៃដឹក">
-              <div className="delivery-status-tabs">
-                <button
-                  type="button"
-                  onClick={() => updateForm("delivery_status", "paid")}
-                  className={`delivery-status-btn ${form.delivery_status === "paid" ? "active-paid" : ""}`}
-                >
-                  បានបង់
-                </button>
-                <button
-                  type="button"
-                  onClick={() => updateForm("delivery_status", "unpaid")}
-                  className={`delivery-status-btn ${form.delivery_status === "unpaid" ? "active-unpaid" : ""}`}
-                >
-                  មិនទាន់បង់
-                </button>
-              </div>
-            </Field>
+                <Field label="ថ្លៃដឹកជញ្ជូន / គីឡូ">
+                  <div className="qty-row">
+                    <input
+                      type="number"
+                      step="1"
+                      min="0"
+                      value={form.delivery_price_per_kg}
+                      onChange={(e) => updateForm("delivery_price_per_kg", e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+                          e.preventDefault();
+                        }
+                      }}
+                      onWheel={(e) => e.target.blur()}
+                      placeholder="0"
+                    />
+                    <select
+                      value={form.delivery_price_per_kg}
+                      onChange={(e) => updateForm("delivery_price_per_kg", e.target.value)}
+                    >
+                      <option value="">ជ្រើស</option>
+                      {DELIVERY_PRICE_OPTIONS.map((price) => (
+                        <option key={price} value={price}>
+                          {price.toLocaleString()}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  {Number(form.delivery_price_per_kg) > 0 && Number(form.quantity) > 0 && (
+                    <small style={{
+                      display: "block",
+                      marginTop: 6,
+                      fontSize: 13,
+                      fontWeight: 700,
+                      color: "#0369a1",
+                    }}>
+                      សរុបថ្លៃដឹក = {(
+                        Number(form.delivery_price_per_kg) *
+                        (form.unit === "ton" ? Number(form.quantity) * 1000 : Number(form.quantity))
+                      ).toLocaleString()} រៀល
+                    </small>
+                  )}
+                </Field>
+
+                <Field label="អ្នកបើកបរ">
+                  <input
+                    value={form.driver_name}
+                    onChange={(e) => updateForm("driver_name", e.target.value)}
+                    placeholder="ឈ្មោះអ្នកបើកបរ"
+                  />
+                </Field>
+
+                <Field label="ស្ថានភាពថ្លៃដឹក">
+                  <div className="delivery-status-tabs">
+                    <button
+                      type="button"
+                      onClick={() => updateForm("delivery_status", "paid")}
+                      className={`delivery-status-btn ${form.delivery_status === "paid" ? "active-paid" : ""}`}
+                    >
+                      បានបង់
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => updateForm("delivery_status", "unpaid")}
+                      className={`delivery-status-btn ${form.delivery_status === "unpaid" ? "active-unpaid" : ""}`}
+                    >
+                      មិនទាន់បង់
+                    </button>
+                  </div>
+                </Field>
+              </>
+            )}
           </div>
 
           <div className="stock-actions">
@@ -1370,8 +1379,32 @@ export default function Stock() {
           <div className="history-head">
             <h2>ប្រវត្តិស្តុក</h2>
 
-            <button type="button" onClick={resetFilters} className="cancel-btn">
+            <button type="button" onClick={() => { resetFilters(); setHistoryTab("all"); }} className="cancel-btn">
               សម្អាត Filter
+            </button>
+          </div>
+
+          <div className="stock-type-tabs" style={{ marginBottom: 22 }}>
+            <button
+              type="button"
+              onClick={() => { setHistoryTab("all"); setVisibleCount(5); }}
+              className={`stock-type-tab ${historyTab === "all" ? "active-add" : ""}`}
+            >
+              ទាំងអស់
+            </button>
+            <button
+              type="button"
+              onClick={() => { setHistoryTab("add"); setVisibleCount(5); }}
+              className={`stock-type-tab ${historyTab === "add" ? "active-add" : ""}`}
+            >
+              បន្ថែមស្តុក
+            </button>
+            <button
+              type="button"
+              onClick={() => { setHistoryTab("clear"); setVisibleCount(5); }}
+              className={`stock-type-tab ${historyTab === "clear" ? "active-clear" : ""}`}
+            >
+              ដកស្តុក
             </button>
           </div>
 
@@ -1387,16 +1420,18 @@ export default function Stock() {
               </select>
             </Field>
 
-            <Field label="ជ្រើសអ្នកបើកបរ">
-              <select value={filters.driver} onChange={(e) => updateFilter("driver", e.target.value)}>
-                <option value="all">ទាំងអស់</option>
-                {drivers.map((driver) => (
-                  <option key={driver} value={driver}>
-                    {driver}
-                  </option>
-                ))}
-              </select>
-            </Field>
+            {historyTab !== "clear" && (
+              <Field label="ជ្រើសអ្នកបើកបរ">
+                <select value={filters.driver} onChange={(e) => updateFilter("driver", e.target.value)}>
+                  <option value="all">ទាំងអស់</option>
+                  {drivers.map((driver) => (
+                    <option key={driver} value={driver}>
+                      {driver}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            )}
 
             <Field label="ចាប់ពីថ្ងៃ">
               <input
@@ -1444,14 +1479,18 @@ export default function Stock() {
               <thead>
                 <tr>
                   <th>កាលបរិច្ឆេទ</th>
-                  <th>ប្រភេទ</th>
+                  {historyTab === "all" && <th>ប្រភេទ</th>}
                   <th>អ្នកផ្គត់ផ្គង់</th>
                   <th>បរិមាណ</th>
-                  <th>តម្លៃទិញ</th>
-                  <th>ថ្លៃដឹក/គីឡូ</th>
-                  <th>សរុបថ្លៃដឹក</th>
-                  <th>អ្នកបើកបរ</th>
-                  <th>ស្ថានភាព</th>
+                  {historyTab !== "clear" && (
+                    <>
+                      <th>តម្លៃទិញ</th>
+                      <th>ថ្លៃដឹក/គីឡូ</th>
+                      <th>សរុបថ្លៃដឹក</th>
+                      <th>អ្នកបើកបរ</th>
+                      <th>ស្ថានភាព</th>
+                    </>
+                  )}
                   <th>ចំណាំ</th>
                   <th style={{ textAlign: "right" }}>សកម្មភាព</th>
                 </tr>
@@ -1461,24 +1500,30 @@ export default function Stock() {
                 {visibleEntries.map((entry) => (
                   <tr key={entry.id}>
                     <td>{formatDate(entry.date)}</td>
-                    <td>
-                      <span className={`stock-type-badge ${entry.type === "clear" ? "clear" : "add"}`}>
-                        {stockEntryTypeLabel(entry.type)}
-                      </span>
-                    </td>
+                    {historyTab === "all" && (
+                      <td>
+                        <span className={`stock-type-badge ${entry.type === "clear" ? "clear" : "add"}`}>
+                          {stockEntryTypeLabel(entry.type)}
+                        </span>
+                      </td>
+                    )}
                     <td>{entry.supplier || "—"}</td>
                     <td className={`qty ${entry.type === "clear" ? "qty-clear" : "qty-add"}`}>
                       {signedKg(entry)}
                     </td>
-                    <td>{formatRielPerKg(entry.buying_price_per_kg)}</td>
-                    <td>{formatRielPerKg(entry.delivery_price_per_kg)}</td>
-                    <td>{formatRiel(entry.delivery_total)}</td>
-                    <td>{entry.driver_name || "—"}</td>
-                    <td>
-                      <span className={`stock-type-badge ${entry.delivery_status === "paid" ? "add" : "clear"}`}>
-                        {entry.delivery_status === "paid" ? "បានបង់" : "មិនទាន់បង់"}
-                      </span>
-                    </td>
+                    {historyTab !== "clear" && (
+                      <>
+                        <td>{formatRielPerKg(entry.buying_price_per_kg)}</td>
+                        <td>{formatRielPerKg(entry.delivery_price_per_kg)}</td>
+                        <td>{formatRiel(entry.delivery_total)}</td>
+                        <td>{entry.driver_name || "—"}</td>
+                        <td>
+                          <span className={`stock-type-badge ${entry.delivery_status === "paid" ? "add" : "clear"}`}>
+                            {entry.delivery_status === "paid" ? "បានបង់" : "មិនទាន់បង់"}
+                          </span>
+                        </td>
+                      </>
+                    )}
                     <td className="muted">{entry.note || "—"}</td>
                     <td>
                       <div className="row-actions">
@@ -1495,7 +1540,7 @@ export default function Stock() {
 
                 {filteredEntries.length === 0 && (
                   <tr>
-                    <td colSpan="11" style={{ textAlign: "center", padding: 30 }}>
+                    <td colSpan={historyTab === "clear" ? "5" : historyTab === "add" ? "10" : "11"} style={{ textAlign: "center", padding: 30 }}>
                       មិនមានប្រវត្តិស្តុកត្រូវនឹង Filter នេះទេ។
                     </td>
                   </tr>
@@ -1524,39 +1569,45 @@ export default function Stock() {
                     <strong>{entry.supplier || "—"}</strong>
                   </div>
 
-                  <div>
-                    <span>តម្លៃទិញ</span>
-                    <strong>{formatRielPerKg(entry.buying_price_per_kg)}</strong>
-                  </div>
+                  {historyTab !== "clear" && (
+                    <div>
+                      <span>តម្លៃទិញ</span>
+                      <strong>{formatRielPerKg(entry.buying_price_per_kg)}</strong>
+                    </div>
+                  )}
                 </div>
 
-                <div className="stock-history-info" style={{ marginTop: 0 }}>
-                  <div>
-                    <span>ថ្លៃដឹក/គីឡូ</span>
-                    <strong>{formatRielPerKg(entry.delivery_price_per_kg)}</strong>
-                  </div>
+                {historyTab !== "clear" && (
+                  <>
+                    <div className="stock-history-info" style={{ marginTop: 0 }}>
+                      <div>
+                        <span>ថ្លៃដឹក/គីឡូ</span>
+                        <strong>{formatRielPerKg(entry.delivery_price_per_kg)}</strong>
+                      </div>
 
-                  <div>
-                    <span>សរុបថ្លៃដឹក</span>
-                    <strong>{formatRiel(entry.delivery_total)}</strong>
-                  </div>
-                </div>
+                      <div>
+                        <span>សរុបថ្លៃដឹក</span>
+                        <strong>{formatRiel(entry.delivery_total)}</strong>
+                      </div>
+                    </div>
 
-                <div className="stock-history-info" style={{ marginTop: 0 }}>
-                  <div>
-                    <span>អ្នកបើកបរ</span>
-                    <strong>{entry.driver_name || "—"}</strong>
-                  </div>
+                    <div className="stock-history-info" style={{ marginTop: 0 }}>
+                      <div>
+                        <span>អ្នកបើកបរ</span>
+                        <strong>{entry.driver_name || "—"}</strong>
+                      </div>
 
-                  <div>
-                    <span>ស្ថានភាព</span>
-                    <strong>
-                      <span className={`stock-type-badge ${entry.delivery_status === "paid" ? "add" : "clear"}`} style={{ fontSize: 12, padding: "4px 10px" }}>
-                        {entry.delivery_status === "paid" ? "បានបង់" : "មិនទាន់បង់"}
-                      </span>
-                    </strong>
-                  </div>
-                </div>
+                      <div>
+                        <span>ស្ថានភាព</span>
+                        <strong>
+                          <span className={`stock-type-badge ${entry.delivery_status === "paid" ? "add" : "clear"}`} style={{ fontSize: 12, padding: "4px 10px" }}>
+                            {entry.delivery_status === "paid" ? "បានបង់" : "មិនទាន់បង់"}
+                          </span>
+                        </strong>
+                      </div>
+                    </div>
+                  </>
+                )}
 
                 <div className="stock-history-note">
                   {entry.note || "គ្មានចំណាំ"}
