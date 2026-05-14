@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import html2canvas from "html2canvas";
 import api from "../api";
+import PrintInvoice from "../components/PrintInvoice";
 import { useSearchParams } from "react-router-dom";
 
 const TABS = {
@@ -51,6 +53,12 @@ export default function Tasks() {
     const [deleteTarget, setDeleteTarget] = useState(null);
     const [debtTarget, setDebtTarget] = useState(null);
     const [showDueBox, setShowDueBox] = useState(true);
+
+    // Invoice view/print/save-image states
+    const [printSale, setPrintSale] = useState(null);
+    const [imageSale, setImageSale] = useState(null);
+    const [savingImageId, setSavingImageId] = useState(null);
+    const imageInvoiceRef = useRef(null);
 
     const [form, setForm] = useState({
         title: "",
@@ -317,6 +325,66 @@ export default function Tasks() {
         }
     };
 
+    function handlePrint(sale) {
+        setPrintSale(sale);
+        setTimeout(() => window.print(), 100);
+    }
+
+    async function handleSaveImage(sale) {
+        if (savingImageId) return;
+
+        setImageSale(sale);
+        setSavingImageId(sale.id);
+
+        try {
+            await new Promise((resolve) => setTimeout(resolve, 200));
+            await document.fonts.ready;
+
+            const target =
+                imageInvoiceRef.current?.querySelector(".heng-huy-print") ||
+                imageInvoiceRef.current;
+
+            if (!target) {
+                alert("រក្សាទុករូបភាពមិនបានទេ។");
+                return;
+            }
+
+            const canvas = await html2canvas(target, {
+                scale: 2,
+                backgroundColor: "#ffffff",
+                useCORS: true,
+                logging: false,
+                width: target.offsetWidth,
+                height: target.offsetHeight,
+                windowWidth: target.offsetWidth,
+                windowHeight: target.offsetHeight,
+            });
+
+            canvas.toBlob((blob) => {
+                if (!blob) {
+                    alert("រក្សាទុករូបភាពមិនបានទេ។");
+                    return;
+                }
+
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement("a");
+
+                link.href = url;
+                link.download = `${sale.invoice_no || "invoice"}.png`;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+
+                setTimeout(() => URL.revokeObjectURL(url), 1000);
+            }, "image/png");
+        } catch (error) {
+            console.error("Save invoice image error:", error);
+            alert("រក្សាទុករូបភាពមិនបានទេ។");
+        } finally {
+            setSavingImageId(null);
+        }
+    }
+
     return (
         <div className="min-h-screen bg-slate-950 p-4 text-white md:p-6">
             {showDueBox && dueTasks.length > 0 && (
@@ -390,6 +458,9 @@ export default function Tasks() {
                     toggleTask={toggleTask}
                     setDeleteTarget={setDeleteTarget}
                     hasDebtReminder={hasDebtReminder}
+                    handlePrint={handlePrint}
+                    handleSaveImage={handleSaveImage}
+                    savingImageId={savingImageId}
                 />
             ) : (
                 <div className="grid gap-6 xl:grid-cols-[420px_1fr]">
@@ -458,6 +529,15 @@ export default function Tasks() {
                     task={deleteTarget}
                     onCancel={() => setDeleteTarget(null)}
                     onConfirm={confirmDelete}
+                />
+            )}
+
+            {printSale && <PrintInvoice invoice={printSale} />}
+            {imageSale && (
+                <PrintInvoice
+                    ref={imageInvoiceRef}
+                    invoice={imageSale}
+                    captureMode={true}
                 />
             )}
 
@@ -540,8 +620,12 @@ function DebtSection({
     toggleTask,
     setDeleteTarget,
     hasDebtReminder,
+    handlePrint,
+    handleSaveImage,
+    savingImageId,
 }) {
     const [visibleCount, setVisibleCount] = useState(DEBT_PAGE_SIZE);
+    const [reminderVisibleCount, setReminderVisibleCount] = useState(DEBT_PAGE_SIZE);
 
     // Reset pagination when search changes
     useEffect(() => {
@@ -593,6 +677,9 @@ function DebtSection({
                                     sale={sale}
                                     hasReminder={hasDebtReminder(sale)}
                                     onCreateReminder={() => openDebtModal(sale)}
+                                    onViewInvoice={() => handlePrint(sale)}
+                                    onSaveImage={() => handleSaveImage(sale)}
+                                    savingImage={savingImageId === sale.id}
                                 />
                             ))}
                         </div>
@@ -632,20 +719,48 @@ function DebtSection({
 
                 {(() => {
                     const pendingDebtTasks = debtTasks.filter((t) => t.status !== "done");
+                    const visibleReminders = pendingDebtTasks.slice(0, reminderVisibleCount);
+                    const hasMoreReminders = pendingDebtTasks.length > reminderVisibleCount;
+                    const remainingReminders = pendingDebtTasks.length - reminderVisibleCount;
+
                     return pendingDebtTasks.length === 0 ? (
                         <EmptyState text="មិនទាន់មានរំលឹកបំណុល" />
                     ) : (
-                        <div className="divide-y divide-slate-800">
-                            {pendingDebtTasks.map((task) => (
-                                <TaskCard
-                                    key={task.id}
-                                    task={task}
-                                    showCheckbox
-                                    onToggle={() => toggleTask(task)}
-                                    onDelete={() => setDeleteTarget(task)}
-                                />
-                            ))}
-                        </div>
+                        <>
+                            <div className="divide-y divide-slate-800">
+                                {visibleReminders.map((task) => (
+                                    <TaskCard
+                                        key={task.id}
+                                        task={task}
+                                        showCheckbox
+                                        onToggle={() => toggleTask(task)}
+                                        onDelete={() => setDeleteTarget(task)}
+                                    />
+                                ))}
+                            </div>
+
+                            {hasMoreReminders && (
+                                <div className="border-t border-slate-800 p-4">
+                                    <button
+                                        onClick={() => setReminderVisibleCount((c) => c + DEBT_PAGE_SIZE)}
+                                        className="w-full rounded-2xl bg-slate-800 px-4 py-3 text-sm font-black text-slate-200 hover:bg-slate-700 active:scale-[0.98]"
+                                    >
+                                        បង្ហាញបន្ថែម ({remainingReminders} រំលឹកទៀត)
+                                    </button>
+                                </div>
+                            )}
+
+                            {!hasMoreReminders && pendingDebtTasks.length > DEBT_PAGE_SIZE && (
+                                <div className="border-t border-slate-800 p-4">
+                                    <button
+                                        onClick={() => setReminderVisibleCount(DEBT_PAGE_SIZE)}
+                                        className="w-full rounded-2xl bg-slate-800 px-4 py-3 text-sm font-black text-slate-400 hover:bg-slate-700 active:scale-[0.98]"
+                                    >
+                                        បង្រួម
+                                    </button>
+                                </div>
+                            )}
+                        </>
                     );
                 })()}
             </section>
@@ -653,7 +768,7 @@ function DebtSection({
     );
 }
 
-function DebtInvoiceCard({ sale, hasReminder, onCreateReminder }) {
+function DebtInvoiceCard({ sale, hasReminder, onCreateReminder, onViewInvoice, onSaveImage, savingImage }) {
     const customerName = sale.customer?.name || sale.customer_name || "មិនមានឈ្មោះ";
     const phone = sale.customer?.phone || sale.customer_phone || "";
     const invoiceNo = sale.invoice_no || `#${sale.id}`;
@@ -694,16 +809,36 @@ function DebtInvoiceCard({ sale, hasReminder, onCreateReminder }) {
                 <MoneyBox label="នៅសល់" value={balance} danger />
             </div>
 
-            <button
-                onClick={onCreateReminder}
-                disabled={hasReminder}
-                className={`mt-4 w-full rounded-2xl px-4 py-3 font-black text-white active:scale-[0.98] ${hasReminder
-                    ? "cursor-not-allowed bg-slate-700 text-slate-300"
-                    : "bg-emerald-600 hover:bg-emerald-700"
+            <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3">
+                <button
+                    onClick={onViewInvoice}
+                    className="rounded-2xl bg-blue-600 px-4 py-3 text-sm font-black text-white hover:bg-blue-700 active:scale-[0.98]"
+                >
+                    🧾 មើល / បោះពុម្ព
+                </button>
+                <button
+                    onClick={onSaveImage}
+                    disabled={savingImage}
+                    className={`rounded-2xl px-4 py-3 text-sm font-black text-white active:scale-[0.98] ${
+                        savingImage
+                            ? "cursor-not-allowed bg-slate-700 text-slate-300"
+                            : "bg-violet-600 hover:bg-violet-700"
                     }`}
-            >
-                {hasReminder ? "បានបង្កើតរំលឹករួចហើយ" : "បង្កើតរំលឹកបំណុល"}
-            </button>
+                >
+                    {savingImage ? "កំពុងរក្សាទុក..." : "📷 រក្សាទុករូបភាព"}
+                </button>
+                <button
+                    onClick={onCreateReminder}
+                    disabled={hasReminder}
+                    className={`rounded-2xl px-4 py-3 text-sm font-black text-white active:scale-[0.98] sm:col-span-1 col-span-2 ${
+                        hasReminder
+                            ? "cursor-not-allowed bg-slate-700 text-slate-300"
+                            : "bg-emerald-600 hover:bg-emerald-700"
+                    }`}
+                >
+                    {hasReminder ? "បានបង្កើតរំលឹករួចហើយ" : "⏰ បង្កើតរំលឹកបំណុល"}
+                </button>
+            </div>
         </div>
     );
 }
