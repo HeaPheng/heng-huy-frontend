@@ -223,6 +223,10 @@ export default function Sales() {
   const [restoringId, setRestoringId] = useState(null);
   const [permanentDeleteId, setPermanentDeleteId] = useState(null);
   const [permanentDeleting, setPermanentDeleting] = useState(false);
+  const [selectedDeletedSaleIds, setSelectedDeletedSaleIds] = useState([]);
+  const [batchRestoring, setBatchRestoring] = useState(false);
+  const [batchDeleting, setBatchDeleting] = useState(false);
+  const [permanentDeleteMultipleOpen, setPermanentDeleteMultipleOpen] = useState(false);
 
   const tableRef = useRef(null);
   const imageInvoiceRef = useRef(null);
@@ -299,7 +303,11 @@ export default function Sales() {
 
   // Auto-load deleted list when the section is opened
   useEffect(() => {
-    if (showDeleted) fetchDeletedSales();
+    if (showDeleted) {
+      fetchDeletedSales();
+    } else {
+      setSelectedDeletedSaleIds([]);
+    }
   }, [showDeleted]);
 
   useEffect(() => {
@@ -362,6 +370,57 @@ export default function Sales() {
       alert("មិនអាចលុបចោលជាអចិន្ត្រៃយ៍បានទេ។ សូមពិនិត្យ backend route DELETE /sales/{id}/force");
     } finally {
       setPermanentDeleting(false);
+    }
+  }
+
+  function toggleSelectDeletedSale(saleId) {
+    setSelectedDeletedSaleIds((prev) => {
+      if (prev.includes(saleId)) return prev.filter((id) => id !== saleId);
+      return [...prev, saleId];
+    });
+  }
+
+  function toggleSelectAllDeletedSales() {
+    if (selectedDeletedSaleIds.length === deletedSales.length && deletedSales.length > 0) {
+      setSelectedDeletedSaleIds([]);
+    } else {
+      setSelectedDeletedSaleIds(deletedSales.map((s) => s.id));
+    }
+  }
+
+  async function handleBatchRestore() {
+    if (selectedDeletedSaleIds.length === 0) return;
+    setBatchRestoring(true);
+    try {
+      await Promise.all(
+        selectedDeletedSaleIds.map((id) => api.post(`/sales/${id}/restore`))
+      );
+      await fetchSales();
+      await fetchDeletedSales();
+      setSelectedDeletedSaleIds([]);
+    } catch (err) {
+      console.error("batch restore error:", err);
+      alert("មានបញ្ហាក្នុងការស្ដារវិក្កយបត្រ។ សូមព្យាយាមម្ដងទៀត។");
+    } finally {
+      setBatchRestoring(false);
+    }
+  }
+
+  async function confirmBatchPermanentDelete() {
+    if (selectedDeletedSaleIds.length === 0) return;
+    setBatchDeleting(true);
+    try {
+      await Promise.all(
+        selectedDeletedSaleIds.map((id) => api.delete(`/sales/${id}/force`))
+      );
+      await fetchDeletedSales();
+      setSelectedDeletedSaleIds([]);
+      setPermanentDeleteMultipleOpen(false);
+    } catch (err) {
+      console.error("batch delete error:", err);
+      alert("មានបញ្ហាក្នុងការលុបចោលវិក្កយបត្រ។ សូមព្យាយាមម្ដងទៀត។");
+    } finally {
+      setBatchDeleting(false);
     }
   }
   async function confirmDeleteSale() {
@@ -1161,20 +1220,51 @@ export default function Sales() {
             {showDeleted && (
               <div style={styles.deletedBody}>
                 <div style={styles.deletedHeader}>
-                  <div>
-                    <h3 style={styles.deletedTitle}>🗑️ វិក្កយបត្រដែលបានលុប</h3>
-                    <p style={styles.deletedSubtitle}>
-                      អ្នកអាចស្ដារវិក្កយបត្រដែលបានលុបដោយចៃដន្យ ដោយចុច «ស្ដារ»
-                    </p>
+                  <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                    <input
+                      type="checkbox"
+                      checked={selectedDeletedSaleIds.length === deletedSales.length && deletedSales.length > 0}
+                      onChange={toggleSelectAllDeletedSales}
+                      style={styles.checkbox}
+                    />
+                    <div>
+                      <h3 style={styles.deletedTitle}>🗑️ វិក្កយបត្រដែលបានលុប</h3>
+                      <p style={styles.deletedSubtitle}>
+                        អ្នកអាចស្ដារវិក្កយបត្រដែលបានលុបដោយចៃដន្យ ដោយចុច «ស្ដារ»
+                      </p>
+                    </div>
                   </div>
-                  <button
-                    type="button"
-                    onClick={fetchDeletedSales}
-                    disabled={loadingDeleted}
-                    style={styles.deletedRefreshBtn}
-                  >
-                    {loadingDeleted ? "⏳ កំពុងទាញ..." : "🔄 ទាញថ្មី"}
-                  </button>
+                  <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
+                    {selectedDeletedSaleIds.length > 0 && (
+                      <>
+                        <span style={{ fontSize: 13, fontWeight: "bold" }}>ជ្រើសរើស {selectedDeletedSaleIds.length}</span>
+                        <button
+                          type="button"
+                          onClick={handleBatchRestore}
+                          disabled={batchRestoring || batchDeleting}
+                          style={styles.restoreBtn}
+                        >
+                          {batchRestoring ? "⏳..." : "♻️ ស្ដារជ្រើសរើស"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setPermanentDeleteMultipleOpen(true)}
+                          disabled={batchRestoring || batchDeleting}
+                          style={styles.forceDeleteBtn}
+                        >
+                          🗑️ លុបចោលជ្រើសរើស
+                        </button>
+                      </>
+                    )}
+                    <button
+                      type="button"
+                      onClick={fetchDeletedSales}
+                      disabled={loadingDeleted}
+                      style={styles.deletedRefreshBtn}
+                    >
+                      {loadingDeleted ? "⏳ កំពុងទាញ..." : "🔄 ទាញថ្មី"}
+                    </button>
+                  </div>
                 </div>
 
                 {loadingDeleted ? (
@@ -1186,7 +1276,23 @@ export default function Sales() {
                 ) : (
                   <div style={styles.deletedList}>
                     {deletedSales.map((sale) => (
-                      <div key={sale.id} style={styles.deletedRow}>
+                      <div
+                        key={sale.id}
+                        style={{
+                          ...styles.deletedRow,
+                          background: selectedDeletedSaleIds.includes(sale.id)
+                            ? (isDark ? "#1e293b" : "#f1f5f9")
+                            : "transparent",
+                        }}
+                      >
+                        <div style={{ display: "flex", alignItems: "center", paddingRight: 10 }}>
+                          <input
+                            type="checkbox"
+                            checked={selectedDeletedSaleIds.includes(sale.id)}
+                            onChange={() => toggleSelectDeletedSale(sale.id)}
+                            style={styles.checkbox}
+                          />
+                        </div>
                         <div style={styles.deletedRowLeft}>
                           <div style={styles.deletedInvoiceNo}>
                             🧾 {sale.invoice_no || `#${sale.id}`}
@@ -1719,6 +1825,44 @@ export default function Sales() {
                 style={{ ...styles.saveBtn, background: "#7f1d1d" }}
               >
                 {permanentDeleting ? "កំពុងលុប..." : "✅ លុបចោលជាអចិន្ត្រៃយ៍"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Permanent Delete Multiple Confirmation Modal ── */}
+      {permanentDeleteMultipleOpen && (
+        <div
+          className="print:hidden"
+          style={styles.modalOverlay}
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) setPermanentDeleteMultipleOpen(false);
+          }}
+        >
+          <div style={styles.modalSmall}>
+            <h2 style={styles.modalTitle}>⚠️ លុបចោលជាអចិន្ត្រៃយ៍ ({selectedDeletedSaleIds.length})</h2>
+            <p style={{ ...styles.modalSub, marginTop: 12 }}>
+              វិក្កយបត្រទាំង {selectedDeletedSaleIds.length} នេះនឹង<strong> លុបចោលជាអចិន្ត្រៃយ៍ </strong>ហើយមិនអាចស្ដារបានទៀតទេ!
+            </p>
+            <p style={{ ...styles.logicNote, marginTop: 10 }}>
+              ⚠️ សូមប្រាកដថាអ្នកពិតជាចង់លុប មុននឹងបន្ត
+            </p>
+            <div style={styles.modalActions}>
+              <button
+                type="button"
+                onClick={() => setPermanentDeleteMultipleOpen(false)}
+                style={styles.cancelBtn}
+              >
+                បោះបង់
+              </button>
+              <button
+                type="button"
+                onClick={confirmBatchPermanentDelete}
+                disabled={batchDeleting}
+                style={{ ...styles.saveBtn, background: "#7f1d1d" }}
+              >
+                {batchDeleting ? "កំពុងលុប..." : "✅ លុបចោលទាំងអស់"}
               </button>
             </div>
           </div>
