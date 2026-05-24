@@ -1164,6 +1164,7 @@ export default function Sales() {
                   openPaymentHistory={openPaymentHistory}
                   openAddPayment={openAddPayment}
                   openEdit={openEdit}
+                  onDelete={setDeleteSale}
                   handlePrint={handlePrint}
                   handleSaveImage={handleSaveImage}
                   savingImageId={savingImageId}
@@ -1898,6 +1899,7 @@ function SaleMobileCard({
   openPaymentHistory,
   openAddPayment,
   openEdit,
+  onDelete,
   handlePrint,
   handleSaveImage,
   savingImageId,
@@ -1985,7 +1987,7 @@ function SaleMobileCard({
 
         <button
           type="button"
-          onClick={() => setDeleteSale(sale)}
+          onClick={() => onDelete(sale)}
           style={styles.deleteBtn}
         >
           លុប
