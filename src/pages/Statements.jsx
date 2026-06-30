@@ -4,7 +4,8 @@ import api from "../api";
 const TYPE_LABELS = {
   A: "ការ៉ុត",
   B: "បាកាន",
-  C: "សំបកក្រហមស",
+  C: "ជប៉ុន",
+  D: "ស្វាយ",
 };
 
 function formatKg(kg) {

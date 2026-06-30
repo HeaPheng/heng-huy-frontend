@@ -59,7 +59,8 @@ function getProductKhmerName(product) {
   const typeMap = {
     A: "ការ៉ុត",
     B: "បាកាន",
-    C: "សំបកក្រហមស",
+    C: "ជប៉ុន",
+    D: "ស្វាយ",
   };
 
   const typeName =

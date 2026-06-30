@@ -698,7 +698,7 @@ function sortRowsNewest(rows) {
 }
 
 function getProductKhmerName(product) {
-  const typeMap = { A: "ការ៉ុត", B: "បាកាន", C: "សំបកក្រហមស" };
+  const typeMap = { A: "ការ៉ុត", B: "បាកាន", C: "ជប៉ុន", D: "ស្វាយ" };
   const typeName = typeMap[String(product?.type || "").toUpperCase()] || product?.type || "-";
   return `${typeName} - លេខ ${product?.grade || "-"}`;
 }

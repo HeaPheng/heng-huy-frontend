@@ -6,10 +6,11 @@ import html2canvas from "html2canvas";
 const TYPE_LABELS = {
   A: "ការ៉ុត",
   B: "បាកាន",
-  C: "សំបកក្រហមស",
+  C: "ជប៉ុន",
+  D: "ស្វាយ",
 };
 
-const TYPES = ["A", "B", "C"];
+const TYPES = ["A", "B", "C", "D"];
 const GRADES = [1, 2, 3];
 const PRICE_OPTIONS = [800, 1000, 1200];
 const QUANTITY_OPTIONS = [5, 10, 15];

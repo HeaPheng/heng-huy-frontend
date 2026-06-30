@@ -3,7 +3,8 @@ import { forwardRef } from "react";
 const TYPE_LABELS = {
   A: "ការ៉ុត",
   B: "បាកាន",
-  C: "សំបកក្រហមស",
+  C: "ជប៉ុន",
+  D: "ស្វាយ",
 };
 
 const SHOP_PHONES = ["0887811477", "0884691231", "017419141"];
