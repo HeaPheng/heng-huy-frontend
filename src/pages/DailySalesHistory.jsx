@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import api from "../api";
+import DatePickerInput from "../components/DatePickerInput";
 
 const LOAD_MORE_DAYS = 7;
 
@@ -304,11 +305,13 @@ export default function DailySalesHistory() {
           </select>
 
           {dateFilterType === "day" && (
-            <input
-              type="date"
+            <DatePickerInput
+              ariaLabel="ជ្រើសថ្ងៃ"
+              placeholder="ជ្រើសថ្ងៃ"
               value={selectedDay}
               onChange={(e) => setSelectedDay(e.target.value)}
-              className="w-full rounded-2xl border border-green-200 bg-white px-4 py-3 font-bold text-slate-800 shadow-sm outline-none transition-colors focus:border-green-600 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
+              className="w-full"
+              controlClassName="rounded-2xl border-green-200 px-4 py-3 shadow-sm dark:border-slate-700"
             />
           )}
 

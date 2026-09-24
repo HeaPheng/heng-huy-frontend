@@ -19,6 +19,57 @@ html.dark body {
   color: #f8fafc;
 }
 
+/* Keep native date-control numbers readable in dark mode, including mobile WebKit. */
+html.dark input[type="date"],
+html.dark input[type="week"],
+html.dark input[type="month"],
+html.dark input[type="datetime-local"] {
+  color: #f8fafc !important;
+  color-scheme: dark;
+  -webkit-text-fill-color: #f8fafc;
+}
+
+html.dark input[type="date"]::-webkit-datetime-edit,
+html.dark input[type="week"]::-webkit-datetime-edit,
+html.dark input[type="month"]::-webkit-datetime-edit,
+html.dark input[type="datetime-local"]::-webkit-datetime-edit,
+html.dark input[type="date"]::-webkit-date-and-time-value,
+html.dark input[type="week"]::-webkit-date-and-time-value,
+html.dark input[type="month"]::-webkit-date-and-time-value,
+html.dark input[type="datetime-local"]::-webkit-date-and-time-value,
+html.dark input[type="date"]::-webkit-datetime-edit-fields-wrapper,
+html.dark input[type="week"]::-webkit-datetime-edit-fields-wrapper,
+html.dark input[type="month"]::-webkit-datetime-edit-fields-wrapper,
+html.dark input[type="datetime-local"]::-webkit-datetime-edit-fields-wrapper,
+html.dark input[type="date"]::-webkit-datetime-edit-text,
+html.dark input[type="week"]::-webkit-datetime-edit-text,
+html.dark input[type="month"]::-webkit-datetime-edit-text,
+html.dark input[type="datetime-local"]::-webkit-datetime-edit-text,
+html.dark input[type="date"]::-webkit-datetime-edit-day-field,
+html.dark input[type="date"]::-webkit-datetime-edit-month-field,
+html.dark input[type="date"]::-webkit-datetime-edit-year-field,
+html.dark input[type="week"]::-webkit-datetime-edit-week-field,
+html.dark input[type="week"]::-webkit-datetime-edit-year-field,
+html.dark input[type="month"]::-webkit-datetime-edit-month-field,
+html.dark input[type="month"]::-webkit-datetime-edit-year-field,
+html.dark input[type="datetime-local"]::-webkit-datetime-edit-day-field,
+html.dark input[type="datetime-local"]::-webkit-datetime-edit-month-field,
+html.dark input[type="datetime-local"]::-webkit-datetime-edit-year-field,
+html.dark input[type="datetime-local"]::-webkit-datetime-edit-hour-field,
+html.dark input[type="datetime-local"]::-webkit-datetime-edit-minute-field,
+html.dark input[type="datetime-local"]::-webkit-datetime-edit-ampm-field {
+  color: #f8fafc;
+  -webkit-text-fill-color: #f8fafc !important;
+  opacity: 1;
+}
+
+html.dark input[type="date"]::-webkit-calendar-picker-indicator,
+html.dark input[type="week"]::-webkit-calendar-picker-indicator,
+html.dark input[type="month"]::-webkit-calendar-picker-indicator,
+html.dark input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+  opacity: 1;
+}
+
 input[type="number"]::-webkit-inner-spin-button,
 input[type="number"]::-webkit-outer-spin-button {
   -webkit-appearance: none;

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import html2canvas from "html2canvas";
 import api from "../api";
 import PrintInvoice from "../components/PrintInvoice";
+import DatePickerInput from "../components/DatePickerInput";
 
 const emptyItem = {
   name: "",
@@ -603,13 +604,12 @@ export default function ManualInvoice() {
                 </InputBlock>
 
                 <InputBlock label="ថ្ងៃបង់">
-                  <input
-                    type="date"
+                  <DatePickerInput
+                    ariaLabel="ថ្ងៃបង់"
                     value={paymentForm.paid_at}
                     onChange={(e) =>
                       setPaymentForm({ ...paymentForm, paid_at: e.target.value })
                     }
-                    className="input-ui"
                   />
                 </InputBlock>
               </div>
@@ -796,13 +796,12 @@ function CreateInvoiceLayout({
               </InputBlock>
 
               <InputBlock label="កាលបរិច្ឆេទលក់">
-                <input
-                  type="date"
+                <DatePickerInput
+                  ariaLabel="កាលបរិច្ឆេទលក់"
                   value={form.invoice_date}
                   onChange={(e) =>
                     setForm({ ...form, invoice_date: e.target.value })
                   }
-                  className="input-ui"
                 />
               </InputBlock>
 
@@ -1140,18 +1139,20 @@ function FilterCard({ filters, setFilters, clearFilters, refresh, loading, count
           <option value="qr">QR</option>
         </select>
 
-        <input
-          type="date"
+        <DatePickerInput
+          ariaLabel="ចាប់ពីថ្ងៃ"
+          placeholder="ជ្រើសថ្ងៃចាប់ផ្ដើម"
           value={filters.from_date}
           onChange={(e) => setFilters({ ...filters, from_date: e.target.value })}
-          className="input-ui lg:col-span-2"
+          className="lg:col-span-2"
         />
 
-        <input
-          type="date"
+        <DatePickerInput
+          ariaLabel="ដល់ថ្ងៃ"
+          placeholder="ជ្រើសថ្ងៃបញ្ចប់"
           value={filters.to_date}
           onChange={(e) => setFilters({ ...filters, to_date: e.target.value })}
-          className="input-ui lg:col-span-2"
+          className="lg:col-span-2"
         />
       </div>
     </div>
@@ -1413,11 +1414,10 @@ function InvoiceInfoCard({ form, setForm, paymentStatus, inModal }) {
 
       <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
         <InputBlock label="ថ្ងៃទី">
-          <input
-            type="date"
+          <DatePickerInput
+            ariaLabel="ថ្ងៃទី"
             value={form.invoice_date}
             onChange={(e) => setForm({ ...form, invoice_date: e.target.value })}
-            className="input-ui"
           />
         </InputBlock>
 

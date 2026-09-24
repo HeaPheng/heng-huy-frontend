@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState, useMemo } from "react";
 import api from "../api";
+import DatePickerInput from "../components/DatePickerInput";
 
 const TYPE_LABELS = {
   auto_deposit: "ប្រាក់ខែ", day_off: "ថ្ងៃឈប់",
@@ -187,10 +188,10 @@ function Modal({ title, onClose, children, maxWidth = "max-w-md" }) {
   return (
     <div className="fixed inset-0 z-[100] flex items-end justify-center sm:items-center p-0 sm:p-4" onClick={onClose}>
       <div className="absolute inset-0 bg-black/50" />
-      <div className={`relative z-10 w-full ${maxWidth} rounded-t-3xl sm:rounded-3xl bg-white p-5 sm:p-6 shadow-2xl dark:bg-slate-900 max-h-[90vh] overflow-y-auto`} onClick={e=>e.stopPropagation()}>
-        <div className="mb-5 flex items-center justify-between">
-          <h2 className="text-2xl font-black text-slate-900 dark:text-white">{title}</h2>
-          <button onClick={onClose} className="flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-100 text-xl font-black text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300">×</button>
+      <div role="dialog" aria-modal="true" aria-label={title} className={`relative z-10 w-full ${maxWidth} max-h-[calc(100dvh-0.5rem)] overflow-x-hidden overflow-y-auto rounded-t-3xl bg-white p-4 shadow-2xl sm:max-h-[90vh] sm:rounded-3xl sm:p-6 dark:bg-slate-900`} onClick={e=>e.stopPropagation()}>
+        <div className="mb-4 flex items-start justify-between gap-3 sm:mb-5 sm:items-center">
+          <h2 className="min-w-0 break-words text-xl font-black leading-relaxed text-slate-900 sm:text-2xl dark:text-white">{title}</h2>
+          <button onClick={onClose} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-xl font-black text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300">×</button>
         </div>
         {children}
       </div>
@@ -512,67 +513,56 @@ function HistoryModal({ staff, txns, loading, onClose }) {
 
   return (
     <Modal title={`ប្រវត្តិ — ${staff.name}`} onClose={onClose} maxWidth="max-w-4xl">
-      <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center">
-        <input
-          type="date"
-          value={startDate}
-          onChange={e => setStartDate(e.target.value)}
-          className="rounded-xl border border-slate-200 px-3 py-2 text-base outline-none focus:border-green-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
-        />
-        <span className="text-slate-400 font-bold hidden sm:inline">ដល់</span>
-        <input
-          type="date"
-          value={endDate}
-          onChange={e => setEndDate(e.target.value)}
-          className="rounded-xl border border-slate-200 px-3 py-2 text-base outline-none focus:border-green-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
-        />
+      <div className="mb-3 grid grid-cols-2 gap-2 sm:mb-4 sm:flex sm:items-center">
+        <DatePickerInput label="ចាប់ពី" value={startDate} onChange={event => setStartDate(event.target.value)} className="sm:w-48" />
+        <DatePickerInput label="ដល់" value={endDate} onChange={event => setEndDate(event.target.value)} className="sm:w-48" />
         {(startDate || endDate) && (
           <button
             onClick={() => { setStartDate(""); setEndDate(""); }}
-            className="rounded-xl bg-slate-100 px-4 py-2 text-base font-bold text-slate-500 hover:bg-slate-200 active:scale-95 dark:bg-slate-800 dark:hover:bg-slate-700"
+            className="col-span-2 w-full rounded-xl bg-slate-100 px-4 py-2 text-base font-bold text-slate-500 hover:bg-slate-200 active:scale-95 sm:w-auto dark:bg-slate-800 dark:hover:bg-slate-700"
           >
             ជម្រះ
           </button>
         )}
       </div>
 
-      <div className="max-h-[55vh] overflow-y-auto pr-3">
+      <div className="sm:max-h-[55vh] sm:overflow-y-auto sm:pr-3">
         {loading ? <p className="py-8 text-center text-base font-bold text-slate-400">កំពុងទាញ...</p>
           : filteredTxns.length === 0 ? <p className="py-8 text-center text-base font-bold text-slate-400">មិនទាន់មានប្រវត្តិក្នុងកាលបរិច្ឆេទនេះទេ</p>
           : (
             <>
               {/* Mobile View */}
-              <div className="flex flex-col gap-3 sm:hidden">
+              <div className="flex min-w-0 flex-col gap-2.5 sm:hidden">
                 {filteredTxns.slice(0, visibleCount).map(tx => {
                   const c = TYPE_COLORS[tx.type] || TYPE_COLORS.manual_add;
                   const isCredit = tx.direction === "credit";
                   const isNegBal = tx.balanceAfter < 0;
                   return (
-                    <div key={tx.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900/50">
-                      <div className="mb-3 flex items-center justify-between">
-                        <span className="text-sm font-bold text-slate-500 dark:text-slate-400">
+                    <div key={tx.id} className="min-w-0 rounded-2xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-800 dark:bg-slate-900/50">
+                      <div className="mb-2 flex min-w-0 items-start justify-between gap-2">
+                        <span className="shrink-0 text-sm font-bold text-slate-500 dark:text-slate-400">
                           {formatDate(tx.created_at)}
                         </span>
-                        <span className="inline-block rounded-full px-2.5 py-1 text-xs font-black" style={{ background: c.bg, color: c.color }}>
+                        <span className="min-w-0 max-w-[58%] rounded-full px-2.5 py-1 text-right text-xs font-black leading-relaxed" style={{ background: c.bg, color: c.color }}>
                           {TYPE_LABELS[tx.type] || tx.type}
                           {tx.days_off ? ` (${tx.days_off} ថ្ងៃ)` : ""}
                         </span>
                       </div>
                       {tx.note && (
-                        <p className="mb-3 text-sm font-bold text-slate-600 dark:text-slate-300">
+                        <p className="mb-2 break-words text-sm font-bold leading-relaxed text-slate-600 dark:text-slate-300">
                           {tx.note}
                         </p>
                       )}
-                      <div className="flex items-center justify-between border-t border-slate-200 pt-3 dark:border-slate-700/50">
-                        <div>
+                      <div className="grid min-w-0 grid-cols-2 gap-3 border-t border-slate-200 pt-2.5 dark:border-slate-700/50">
+                        <div className="min-w-0">
                           <p className="text-xs font-bold text-slate-400">ចំនួន</p>
-                          <p className={`text-base font-black ${isCredit ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>
+                          <p className={`break-words text-[15px] font-black leading-relaxed ${isCredit ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>
                             {isCredit ? "+" : "−"}{formatRiel(tx.amount)}
                           </p>
                         </div>
-                        <div className="text-right">
+                        <div className="min-w-0 text-right">
                           <p className="text-xs font-bold text-slate-400">សមតុល្យ</p>
-                          <p className={`text-base font-black ${isNegBal ? "text-red-600 dark:text-red-400" : "text-slate-900 dark:text-white"}`}>
+                          <p className={`break-words text-[15px] font-black leading-relaxed ${isNegBal ? "text-red-600 dark:text-red-400" : "text-slate-900 dark:text-white"}`}>
                             {isNegBal ? "−" : ""}{formatRiel(Math.abs(tx.balanceAfter))}
                           </p>
                         </div>
@@ -628,10 +618,10 @@ function HistoryModal({ staff, txns, loading, onClose }) {
               </div>
 
               {filteredTxns.length > visibleCount && (
-                <div className="mt-5 mb-2 flex justify-center">
+                <div className="mt-4 mb-2 flex justify-center">
                   <button
                     onClick={() => setVisibleCount(prev => prev + 5)}
-                    className="rounded-xl bg-slate-100 px-6 py-3 text-base font-bold text-slate-600 transition hover:bg-slate-200 active:scale-95 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
+                    className="w-full rounded-xl bg-slate-100 px-6 py-3 text-base font-bold text-slate-600 transition hover:bg-slate-200 active:scale-95 sm:w-auto dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
                   >
                     មើលបន្ថែម ({filteredTxns.length - visibleCount} ទៀត)
                   </button>

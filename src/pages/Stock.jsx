@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import api from "../api";
+import DatePickerInput from "../components/DatePickerInput";
 
 const TYPE_LABELS = {
   A: "ការ៉ុត",
@@ -10,6 +11,7 @@ const TYPE_LABELS = {
 
 const TYPES = ["A", "B", "C", "D"];
 const GRADES = [1, 2, 3];
+const LOW_STOCK_THRESHOLD = 300;
 
 function formatKg(kg) {
   const value = Number(kg || 0);
@@ -98,10 +100,52 @@ export default function Stock() {
   };
 
   const [form, setForm] = useState(emptyForm);
+  const [allSuppliers, setAllSuppliers] = useState([]);
+  const [showSupplierSuggestions, setShowSupplierSuggestions] = useState(false);
+  const supplierRef = useRef(null);
 
   useEffect(() => {
     fetchProducts();
+    fetchAllSuppliers();
   }, []);
+
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (
+        supplierRef.current &&
+        !supplierRef.current.contains(event.target)
+      ) {
+        setShowSupplierSuggestions(false);
+      }
+    }
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
+
+  async function fetchAllSuppliers() {
+    try {
+      const res = await api.get("/stock-entries/suppliers");
+      if (Array.isArray(res.data)) {
+        setAllSuppliers(res.data.map((s) => s?.trim()).filter(Boolean));
+        return;
+      }
+    } catch (e) {
+      try {
+        const reportRes = await api.get("/stock-reports/suppliers");
+        if (reportRes.data?.by_supplier) {
+          const names = Object.values(reportRes.data.by_supplier)
+            .map((item) => item.supplier?.trim())
+            .filter((s) => s && s !== "មិនមានឈ្មោះ");
+          setAllSuppliers(Array.from(new Set(names)));
+        }
+      } catch (err) {
+        // Fallback gracefully
+      }
+    }
+  }
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -260,6 +304,7 @@ export default function Stock() {
       resetForm();
       await fetchProducts();
       await fetchEntries(activeProduct.id);
+      fetchAllSuppliers();
     } catch (error) {
       alert(
         error.response?.data?.message ||
@@ -290,6 +335,7 @@ export default function Stock() {
       if (activeProduct?.id) {
         await fetchEntries(activeProduct.id);
       }
+      fetchAllSuppliers();
     } catch {
       alert("លុបស្តុកមិនបានទេ។");
     }
@@ -304,6 +350,22 @@ export default function Stock() {
       a.localeCompare(b)
     );
   }, [entries]);
+
+  const combinedSuppliers = useMemo(() => {
+    const list = [...allSuppliers, ...suppliers];
+    const cleaned = list.map((s) => s?.trim()).filter(Boolean);
+    return Array.from(new Set(cleaned)).sort((a, b) => a.localeCompare(b));
+  }, [allSuppliers, suppliers]);
+
+  const recommendedSuppliers = useMemo(() => {
+    const query = (form.supplier || "").trim().toLowerCase();
+    if (!query) {
+      return combinedSuppliers;
+    }
+    return combinedSuppliers.filter((s) =>
+      s.toLowerCase().includes(query)
+    );
+  }, [combinedSuppliers, form.supplier]);
 
   const drivers = useMemo(() => {
     const driverNames = entries
@@ -642,6 +704,176 @@ export default function Stock() {
 
         .note-field {
           grid-column: span 2;
+        }
+
+        .supplier-autocomplete-wrap {
+          position: relative;
+          width: 100%;
+        }
+
+        .supplier-input-box {
+          position: relative;
+          display: flex;
+          align-items: center;
+          width: 100%;
+        }
+
+        .supplier-input-box input {
+          padding-right: 42px !important;
+        }
+
+        .supplier-dropdown-trigger {
+          position: absolute;
+          right: 8px;
+          top: 50%;
+          transform: translateY(-50%);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          width: 32px;
+          height: 32px;
+          background: transparent;
+          border: none;
+          cursor: pointer;
+          color: #64748b;
+          border-radius: 8px;
+          transition: all 0.2s ease;
+        }
+
+        .supplier-dropdown-trigger:hover {
+          background: #f1f5f9;
+          color: #16a34a;
+        }
+
+        html.dark .supplier-dropdown-trigger {
+          color: #94a3b8;
+        }
+
+        html.dark .supplier-dropdown-trigger:hover {
+          background: #1e293b;
+          color: #4ade80;
+        }
+
+        .supplier-dropdown-trigger .trigger-arrow {
+          width: 18px;
+          height: 18px;
+          transition: transform 0.2s ease;
+        }
+
+        .supplier-dropdown-trigger .trigger-arrow.open {
+          transform: rotate(180deg);
+        }
+
+        .supplier-dropdown-menu {
+          position: absolute;
+          top: calc(100% + 6px);
+          left: 0;
+          right: 0;
+          z-index: 70;
+          background: #ffffff;
+          border: 1px solid #d6ead8;
+          border-radius: 14px;
+          box-shadow: 0 12px 28px -4px rgba(0, 0, 0, 0.12), 0 6px 12px -4px rgba(0, 0, 0, 0.08);
+          overflow: hidden;
+          animation: dropdownFadeIn 0.15s ease-out;
+        }
+
+        @keyframes dropdownFadeIn {
+          from {
+            opacity: 0;
+            transform: translateY(-4px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+
+        html.dark .supplier-dropdown-menu {
+          background: #0f172a;
+          border-color: #334155;
+          box-shadow: 0 12px 28px -4px rgba(0, 0, 0, 0.6);
+        }
+
+        .supplier-dropdown-header {
+          padding: 10px 14px 6px 14px;
+          font-size: 11px;
+          font-weight: 800;
+          color: #64748b;
+          text-transform: uppercase;
+          background: #f8fafc;
+          border-bottom: 1px solid #e2e8f0;
+        }
+
+        html.dark .supplier-dropdown-header {
+          background: #1e293b;
+          border-bottom-color: #334155;
+          color: #94a3b8;
+        }
+
+        .supplier-dropdown-list {
+          max-height: 210px;
+          overflow-y: auto;
+        }
+
+        .supplier-dropdown-item {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          width: 100%;
+          padding: 11px 14px;
+          border: none;
+          background: transparent;
+          text-align: left;
+          font-size: 14px;
+          font-weight: 700;
+          color: #1e293b;
+          cursor: pointer;
+          transition: all 0.15s ease;
+          border-bottom: 1px solid #f8fafc;
+        }
+
+        .supplier-dropdown-item:last-child {
+          border-bottom: none;
+        }
+
+        html.dark .supplier-dropdown-item {
+          color: #f1f5f9;
+          border-bottom-color: #1e293b;
+        }
+
+        .supplier-dropdown-item:hover,
+        .supplier-dropdown-item:focus {
+          background: #ecfdf5;
+          color: #15803d;
+          padding-left: 18px;
+        }
+
+        html.dark .supplier-dropdown-item:hover,
+        html.dark .supplier-dropdown-item:focus {
+          background: #064e3b;
+          color: #6ee7b7;
+          padding-left: 18px;
+        }
+
+        .farmer-badge-icon {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          width: 26px;
+          height: 26px;
+          border-radius: 8px;
+          background: #ecfdf5;
+          font-size: 14px;
+          flex-shrink: 0;
+        }
+
+        html.dark .farmer-badge-icon {
+          background: #064e3b;
+        }
+
+        .farmer-name {
+          flex: 1;
         }
 
         .stock-actions {
@@ -1146,39 +1378,178 @@ export default function Stock() {
             <p>បន្ថែម ដក កែប្រែ លុបស្តុកដំឡូង និងមើលប្រវត្តិតាមប្រភេទ។</p>
 
             <div className="stock-tabs">
-              {TYPES.map((type) => (
-                <button
-                  key={type}
-                  type="button"
-                  onClick={() => {
-                    setActiveType(type);
-                    setActiveGrade(1);
-                  }}
-                  className={`stock-tab ${activeType === type ? "active" : ""}`}
-                >
-                  {TYPE_LABELS[type]}
-                </button>
-              ))}
+              {TYPES.map((type) => {
+                const typeProducts = products.filter((p) => String(p.type) === type);
+                const outCount = typeProducts.filter((p) => Number(p.stock_kg || 0) <= 0).length;
+                const lowCount = typeProducts.filter(
+                  (p) =>
+                    Number(p.stock_kg || 0) > 0 &&
+                    Number(p.stock_kg || 0) <= LOW_STOCK_THRESHOLD
+                ).length;
+                const isAllOut = typeProducts.length > 0 && outCount === typeProducts.length;
+                const hasWarning = typeProducts.length > 0 && (outCount > 0 || lowCount > 0);
+
+                return (
+                  <button
+                    key={type}
+                    type="button"
+                    onClick={() => {
+                      setActiveType(type);
+                      setActiveGrade(1);
+                    }}
+                    className={`stock-tab ${activeType === type ? "active" : ""}`}
+                    style={{ position: "relative" }}
+                  >
+                    <span>{TYPE_LABELS[type]}</span>
+                    {isAllOut && (
+                      <span
+                        style={{
+                          position: "absolute",
+                          top: "-8px",
+                          right: "-6px",
+                          background: "#ef4444",
+                          color: "#ffffff",
+                          fontSize: "10px",
+                          fontWeight: "800",
+                          padding: "2px 8px",
+                          borderRadius: "999px",
+                          lineHeight: "1",
+                          boxShadow: "0 1px 3px rgba(0,0,0,0.2)",
+                          border: "2px solid #ffffff",
+                        }}
+                      >
+                        អស់
+                      </span>
+                    )}
+                    {!isAllOut && hasWarning && (
+                      <span
+                        style={{
+                          position: "absolute",
+                          top: "-8px",
+                          right: "-6px",
+                          background: outCount > 0 ? "#ef4444" : "#f59e0b",
+                          color: "#ffffff",
+                          fontSize: "10px",
+                          fontWeight: "800",
+                          padding: "2px 8px",
+                          borderRadius: "999px",
+                          lineHeight: "1",
+                          boxShadow: "0 1px 3px rgba(0,0,0,0.2)",
+                          border: "2px solid #ffffff",
+                        }}
+                      >
+                        {outCount > 0 ? "អស់ខ្លះ" : "តិច"}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
             </div>
 
             <div className="grade-tabs">
-              {GRADES.map((grade) => (
-                <button
-                  key={grade}
-                  type="button"
-                  onClick={() => setActiveGrade(grade)}
-                  className={`grade-tab ${Number(activeGrade) === Number(grade) ? "active" : ""}`}
-                >
-                  លេខ {grade}
-                </button>
-              ))}
+              {GRADES.map((grade) => {
+                const p = products.find(
+                  (x) => String(x.type) === activeType && Number(x.grade) === grade
+                );
+                const stock = Number(p?.stock_kg || 0);
+                const isOut = !p || stock <= 0;
+                const isLow = stock > 0 && stock <= LOW_STOCK_THRESHOLD;
+
+                return (
+                  <button
+                    key={grade}
+                    type="button"
+                    onClick={() => setActiveGrade(grade)}
+                    className={`grade-tab ${Number(activeGrade) === Number(grade) ? "active" : ""}`}
+                    style={{ position: "relative" }}
+                  >
+                    <span>លេខ {grade}</span>
+                    {isOut && (
+                      <span
+                        style={{
+                          position: "absolute",
+                          top: "-8px",
+                          right: "-6px",
+                          background: "#ef4444",
+                          color: "#ffffff",
+                          fontSize: "10px",
+                          fontWeight: "800",
+                          padding: "2px 8px",
+                          borderRadius: "999px",
+                          lineHeight: "1",
+                          boxShadow: "0 1px 3px rgba(0,0,0,0.2)",
+                          border: "2px solid #ffffff",
+                        }}
+                      >
+                        អស់
+                      </span>
+                    )}
+                    {isLow && (
+                      <span
+                        style={{
+                          position: "absolute",
+                          top: "-8px",
+                          right: "-6px",
+                          background: "#f59e0b",
+                          color: "#ffffff",
+                          fontSize: "10px",
+                          fontWeight: "800",
+                          padding: "2px 8px",
+                          borderRadius: "999px",
+                          lineHeight: "1",
+                          boxShadow: "0 1px 3px rgba(0,0,0,0.2)",
+                          border: "2px solid #ffffff",
+                        }}
+                      >
+                        តិច
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
             </div>
           </div>
 
           <div className="stock-current">
             <span>ស្តុកបច្ចុប្បន្ន</span>
-            <strong>{formatKg(activeProduct?.stock_kg)}</strong>
+            <strong style={{
+              color: Number(activeProduct?.stock_kg || 0) <= 0
+                ? "#dc2626"
+                : Number(activeProduct?.stock_kg || 0) <= LOW_STOCK_THRESHOLD
+                  ? "#d97706"
+                  : undefined
+            }}>
+              {formatKg(activeProduct?.stock_kg)}
+            </strong>
             <small>{productKhmer(activeProduct)}</small>
+            {Number(activeProduct?.stock_kg || 0) <= 0 && (
+              <span style={{
+                display: "inline-block",
+                marginTop: "6px",
+                background: "#dc2626",
+                color: "#ffffff",
+                fontSize: "11px",
+                fontWeight: "bold",
+                padding: "2px 8px",
+                borderRadius: "6px"
+              }}>
+                អស់ស្តុក
+              </span>
+            )}
+            {Number(activeProduct?.stock_kg || 0) > 0 && Number(activeProduct?.stock_kg || 0) <= LOW_STOCK_THRESHOLD && (
+              <span style={{
+                display: "inline-block",
+                marginTop: "6px",
+                background: "#f59e0b",
+                color: "#ffffff",
+                fontSize: "11px",
+                fontWeight: "bold",
+                padding: "2px 8px",
+                borderRadius: "6px"
+              }}>
+                ស្តុកនៅសល់តិច
+              </span>
+            )}
           </div>
         </div>
 
@@ -1208,8 +1579,8 @@ export default function Stock() {
 
           <div className="stock-form-grid">
             <Field label="កាលបរិច្ឆេទ">
-              <input
-                type="date"
+              <DatePickerInput
+                ariaLabel="កាលបរិច្ឆេទ"
                 value={form.date}
                 onChange={(e) => updateForm("date", e.target.value)}
               />
@@ -1240,11 +1611,66 @@ export default function Stock() {
             </Field>
 
             <Field label="អ្នកផ្គត់ផ្គង់ / កសិដ្ឋាន">
-              <input
-                value={form.supplier}
-                onChange={(e) => updateForm("supplier", e.target.value)}
-                placeholder="ឈ្មោះអ្នកផ្គត់ផ្គង់ ឬ កសិដ្ឋាន"
-              />
+              <div ref={supplierRef} className="supplier-autocomplete-wrap">
+                <div className="supplier-input-box">
+                  <input
+                    value={form.supplier}
+                    onChange={(e) => {
+                      updateForm("supplier", e.target.value);
+                      setShowSupplierSuggestions(true);
+                    }}
+                    onFocus={() => setShowSupplierSuggestions(true)}
+                    placeholder="ឈ្មោះអ្នកផ្គត់ផ្គង់ ឬ កសិដ្ឋាន"
+                    autoComplete="off"
+                  />
+                  {recommendedSuppliers.length > 0 && (
+                    <button
+                      type="button"
+                      tabIndex={-1}
+                      onClick={() => setShowSupplierSuggestions((prev) => !prev)}
+                      className="supplier-dropdown-trigger"
+                      title="ជ្រើសអ្នកផ្គត់ផ្គង់ដែលមានស្រាប់"
+                    >
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        viewBox="0 0 20 20"
+                        fill="currentColor"
+                        className={`trigger-arrow ${showSupplierSuggestions ? "open" : ""}`}
+                      >
+                        <path
+                          fillRule="evenodd"
+                          d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z"
+                          clipRule="evenodd"
+                        />
+                      </svg>
+                    </button>
+                  )}
+                </div>
+
+                {showSupplierSuggestions && recommendedSuppliers.length > 0 && (
+                  <div className="supplier-dropdown-menu">
+                    <div className="supplier-dropdown-header">
+                      <span>អ្នកផ្គត់ផ្គង់ / កសិដ្ឋានដែលមានស្រាប់ ({recommendedSuppliers.length})</span>
+                    </div>
+                    <div className="supplier-dropdown-list">
+                      {recommendedSuppliers.map((name) => (
+                        <button
+                          key={name}
+                          type="button"
+                          onClick={() => {
+                            updateForm("supplier", name);
+                            setShowSupplierSuggestions(false);
+                          }}
+                          className="supplier-dropdown-item"
+                        >
+                          <span className="farmer-badge-icon">🌾</span>
+                          <span className="farmer-name">{name}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
             </Field>
 
             <Field label={form.type === "clear" ? "មូលហេតុដកស្តុក" : "ចំណាំ"}>
@@ -1435,16 +1861,18 @@ export default function Stock() {
             )}
 
             <Field label="ចាប់ពីថ្ងៃ">
-              <input
-                type="date"
+              <DatePickerInput
+                ariaLabel="ចាប់ពីថ្ងៃ"
+                placeholder="ជ្រើសថ្ងៃចាប់ផ្ដើម"
                 value={filters.startDate}
                 onChange={(e) => updateFilter("startDate", e.target.value)}
               />
             </Field>
 
             <Field label="ដល់ថ្ងៃ">
-              <input
-                type="date"
+              <DatePickerInput
+                ariaLabel="ដល់ថ្ងៃ"
+                placeholder="ជ្រើសថ្ងៃបញ្ចប់"
                 value={filters.endDate}
                 onChange={(e) => updateFilter("endDate", e.target.value)}
               />

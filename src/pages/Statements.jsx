@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import api from "../api";
+import DatePickerInput from "../components/DatePickerInput";
 
 const TYPE_LABELS = {
   A: "ការ៉ុត",
@@ -652,8 +653,9 @@ function CustomerStatement() {
           </Field>
 
           <Field label="ចាប់ពីថ្ងៃ">
-            <input
-              type="date"
+            <DatePickerInput
+              ariaLabel="ចាប់ពីថ្ងៃ"
+              placeholder="ជ្រើសថ្ងៃចាប់ផ្ដើម"
               disabled={filters.period !== "custom"}
               value={filters.from}
               onChange={(e) => setFilters((prev) => ({ ...prev, from: e.target.value }))}
@@ -661,8 +663,9 @@ function CustomerStatement() {
           </Field>
 
           <Field label="ដល់ថ្ងៃ">
-            <input
-              type="date"
+            <DatePickerInput
+              ariaLabel="ដល់ថ្ងៃ"
+              placeholder="ជ្រើសថ្ងៃបញ្ចប់"
               disabled={filters.period !== "custom"}
               value={filters.to}
               onChange={(e) => setFilters((prev) => ({ ...prev, to: e.target.value }))}
@@ -895,8 +898,9 @@ function FarmerStatement() {
           </Field>
 
           <Field label="ចាប់ពីថ្ងៃ">
-            <input
-              type="date"
+            <DatePickerInput
+              ariaLabel="ចាប់ពីថ្ងៃ"
+              placeholder="ជ្រើសថ្ងៃចាប់ផ្ដើម"
               value={filters.start_date}
               onChange={(e) =>
                 setFilters((prev) => ({ ...prev, start_date: e.target.value }))
@@ -905,8 +909,9 @@ function FarmerStatement() {
           </Field>
 
           <Field label="ដល់ថ្ងៃ">
-            <input
-              type="date"
+            <DatePickerInput
+              ariaLabel="ដល់ថ្ងៃ"
+              placeholder="ជ្រើសថ្ងៃបញ្ចប់"
               value={filters.end_date}
               onChange={(e) =>
                 setFilters((prev) => ({ ...prev, end_date: e.target.value }))
@@ -1180,4 +1185,4 @@ function SummaryBox({ label, value }) {
       <strong>{value}</strong>
     </div>
   );
-} 
+}

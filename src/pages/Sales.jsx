@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import html2canvas from "html2canvas";
 import api from "../api";
 import PrintInvoice from "../components/PrintInvoice";
+import DatePickerInput from "../components/DatePickerInput";
 
 
 const INITIAL_FILTERS = {
@@ -898,7 +899,32 @@ export default function Sales() {
               <option value="debt">ជំពាក់</option>
             </select>
 
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+                gap: 14,
+                flex: isMobile ? "1 1 100%" : "0 1 294px",
+                minWidth: 0,
+              }}
+            >
+              <DatePickerInput
+                ariaLabel="ចាប់ពីថ្ងៃ"
+                placeholder="ចាប់ពីថ្ងៃ"
+                value={filters.dateFrom}
+                onChange={(e) => updateFilter("dateFrom", e.target.value)}
+              />
+
+              <DatePickerInput
+                ariaLabel="ដល់ថ្ងៃ"
+                placeholder="ដល់ថ្ងៃ"
+                value={filters.dateTo}
+                onChange={(e) => updateFilter("dateTo", e.target.value)}
+              />
+            </div>
+
             <select
+              aria-label="ប្រភេទវិក្កយបត្រ"
               value={filters.invoiceType}
               onChange={(e) => updateFilter("invoiceType", e.target.value)}
               style={styles.statusSelect}
@@ -907,20 +933,6 @@ export default function Sales() {
               <option value="merged">វិក្កយបត្រសរុប</option>
               <option value="all">ទាំងអស់</option>
             </select>
-
-            <input
-              type="date"
-              value={filters.dateFrom}
-              onChange={(e) => updateFilter("dateFrom", e.target.value)}
-              style={styles.date}
-            />
-
-            <input
-              type="date"
-              value={filters.dateTo}
-              onChange={(e) => updateFilter("dateTo", e.target.value)}
-              style={styles.date}
-            />
 
             <button
               type="button"

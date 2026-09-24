@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import html2canvas from "html2canvas";
 import api from "../api";
 import PrintInvoice from "../components/PrintInvoice";
+import DatePickerInput from "../components/DatePickerInput";
 import { useSearchParams } from "react-router-dom";
 
 const TABS = {
@@ -861,11 +862,11 @@ function DebtReminderModal({ sale, form, setForm, onCancel, onSubmit }) {
 
                 <div className="mt-5 grid gap-4 sm:grid-cols-2">
                     <Field label="ថ្ងៃត្រូវរំលឹក">
-                        <input
-                            type="date"
+                        <DatePickerInput
+                            ariaLabel="ថ្ងៃត្រូវរំលឹក"
                             value={form.due_date}
                             onChange={(e) => setForm({ ...form, due_date: e.target.value })}
-                            className="input-dark"
+                            controlClassName="border-slate-700 bg-slate-950 text-white"
                         />
                     </Field>
 

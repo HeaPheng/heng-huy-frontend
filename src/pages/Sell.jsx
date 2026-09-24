@@ -1,7 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import api from "../api";
 import PrintInvoice from "../components/PrintInvoice";
+import DatePickerInput from "../components/DatePickerInput";
 import html2canvas from "html2canvas";
+import {
+  buildOcrCartItems,
+  productForGrade,
+  recalculateCartItem,
+  updateQuantityParts,
+} from "../utils/ocrCart";
 
 const TYPE_LABELS = {
   A: "ការ៉ុត",
@@ -15,6 +22,7 @@ const GRADES = [1, 2, 3];
 const PRICE_OPTIONS = [800, 1000, 1200];
 const QUANTITY_OPTIONS = [5, 10, 15];
 const WALK_IN_CUSTOMER = "លក់ក្រៅ";
+const LOW_STOCK_THRESHOLD = 200;
 
 function formatKg(kg) {
   const value = Number(kg || 0);
@@ -72,8 +80,15 @@ function preventNumberControl(e) {
 }
 
 export default function Sell() {
+  let isAdmin = false;
+  try {
+    isAdmin = JSON.parse(localStorage.getItem("pos_user") || "{}")?.role === "admin";
+  } catch { /* Follow the existing stored-user authentication convention. */ }
   const suggestionRef = useRef(null);
   const invoiceImageRef = useRef(null);
+  const ocrInputRef = useRef(null);
+  const ocrCameraInputRef = useRef(null);
+  const cartItemSequence = useRef(0);
 
   const [products, setProducts] = useState([]);
   const [activeType, setActiveType] = useState("A");
@@ -96,6 +111,10 @@ export default function Sell() {
   const [customBoxValue, setCustomBoxValue] = useState("");
 
   const [cartItems, setCartItems] = useState([]);
+  const [editingCartItem, setEditingCartItem] = useState(null);
+  const [ocrLoading, setOcrLoading] = useState(false);
+  const [ocrMessage, setOcrMessage] = useState("");
+  const [ocrError, setOcrError] = useState("");
   const [loading, setLoading] = useState(false);
   const [invoice, setInvoice] = useState(null);
   const [stockModalOpen, setStockModalOpen] = useState(false);
@@ -119,6 +138,7 @@ export default function Sell() {
   async function fetchProducts() {
     const res = await api.get("/products");
     setProducts(res.data);
+    return res.data;
   }
 
   const selectedProduct = useMemo(() => {
@@ -167,12 +187,45 @@ export default function Sell() {
   function goToStockPage() {
     const params = new URLSearchParams();
 
-    if (selectedProduct?.type) params.set("type", selectedProduct.type);
-    if (selectedProduct?.grade) params.set("grade", selectedProduct.grade);
+    const targetType = selectedProduct?.type || activeType;
+    const targetGrade = selectedProduct?.grade || activeGrade;
+
+    if (targetType) params.set("type", targetType);
+    if (targetGrade) params.set("grade", String(targetGrade));
     if (quantity) params.set("quantity", quantity);
     if (unit) params.set("unit", unit);
 
     window.location.href = `/stock?${params.toString()}`;
+  }
+
+  function getGradeStockStatus(grade, type = activeType) {
+    const p = products.find(
+      (item) => String(item.type) === type && Number(item.grade) === grade
+    );
+    const stock = Number(p?.stock_kg || 0);
+    if (!p || stock <= 0) return { status: "out", stock: 0 };
+    if (stock <= LOW_STOCK_THRESHOLD) return { status: "low", stock };
+    return { status: "ok", stock };
+  }
+
+  function getTypeStockStatus(type) {
+    const typeProducts = products.filter((p) => String(p.type) === type);
+    if (typeProducts.length === 0) return { status: "out", outCount: 0, lowCount: 0 };
+
+    const outCount = typeProducts.filter((p) => Number(p.stock_kg || 0) <= 0).length;
+    const lowCount = typeProducts.filter(
+      (p) =>
+        Number(p.stock_kg || 0) > 0 &&
+        Number(p.stock_kg || 0) <= LOW_STOCK_THRESHOLD
+    ).length;
+
+    if (outCount === typeProducts.length) {
+      return { status: "out", outCount, lowCount };
+    }
+    if (outCount > 0 || lowCount > 0) {
+      return { status: "warning", outCount, lowCount };
+    }
+    return { status: "ok", outCount: 0, lowCount: 0 };
   }
 
   function buildCurrentItem() {
@@ -197,6 +250,7 @@ export default function Sell() {
     }
 
     return {
+      client_id: `cart-${cartItemSequence.current++}`,
       product_id: selectedProduct.id,
       product: selectedProduct,
       quantity: Number(quantity),
@@ -225,6 +279,80 @@ export default function Sell() {
 
   function removeItem(index) {
     setCartItems((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  function updateCartItem(clientId, update) {
+    setCartItems((current) => current.map((item) => (
+      item.client_id === clientId ? update(item) : item
+    )));
+  }
+
+  async function handleOcrImage(event) {
+    const image = event.target.files?.[0];
+    event.target.value = "";
+
+    if (!image || ocrLoading) return;
+    if (image.type && !image.type.startsWith("image/")) {
+      setOcrError("សូមជ្រើសរើសឯកសាររូបភាព។");
+      return;
+    }
+
+    setOcrLoading(true);
+    setOcrMessage("");
+    setOcrError("");
+
+    try {
+      const catalog = products.length > 0 ? products : await fetchProducts();
+      const form = new FormData();
+      form.append("image", image);
+
+      const response = await api.post("/ocr/test", form, { timeout: 90000 });
+      const data = response.data;
+
+      if (data.success !== true || !Array.isArray(data.parsed?.items)) {
+        throw new Error("Invalid OCR response");
+      }
+
+      const customerMatch = data.customer_match;
+      if (["exact_phone", "exact_name"].includes(customerMatch?.status) && customerMatch.customer) {
+        setCustomerName(customerMatch.customer.name || "");
+        setCustomerPhone(customerMatch.customer.phone || "");
+        setSuggestions([]);
+        setShowSuggestions(false);
+      }
+
+      const built = buildOcrCartItems(
+        data.parsed.items,
+        Array.isArray(data.product_matches) ? data.product_matches : [],
+        catalog,
+        (index) => `ocr-${cartItemSequence.current++}-${index}`
+      );
+
+      if (built.items.length > 0) {
+        setCartItems((current) => [...current, ...built.items]);
+      }
+
+      const messages = [];
+      if (built.items.length > 0) {
+        messages.push(`បានបន្ថែមទំនិញ ${built.items.length} មុខទៅក្នុងវិក្កយបត្រ។`);
+      }
+      if (built.unresolvedIndexes.length > 0) {
+        messages.push(`មានទំនិញ ${built.unresolvedIndexes.length} មុខមិនអាចផ្គូផ្គងបាន។ សូមបញ្ចូលដោយដៃ។`);
+      }
+      if (data.parsed.items.length === 0) {
+        messages.push("រកមិនឃើញទំនិញក្នុងរូបភាព។");
+      }
+      setOcrMessage(messages.join(" "));
+    } catch (error) {
+      const status = error.response?.status;
+      setOcrError(status === 403
+        ? "ត្រូវការសិទ្ធិអ្នកគ្រប់គ្រងដើម្បីស្កេនវិក្កយបត្រ។"
+        : status === 422
+          ? "សូមជ្រើសរូបភាពដែលប្រព័ន្ធអាចទទួលយកបាន។"
+          : "អានរូបភាពមិនបានទេ។ សូមព្យាយាមម្តងទៀត។");
+    } finally {
+      setOcrLoading(false);
+    }
   }
 
   function selectPaymentStatus(status) {
@@ -444,6 +572,20 @@ export default function Sell() {
             <p className="mt-2 text-slate-500 dark:text-slate-400">
               លក់ដំឡូង កាត់ស្តុក និងបង្កើតវិក្កយបត្រ។
             </p>
+            {isAdmin && <div className="mt-4">
+              <input ref={ocrInputRef} type="file" accept="image/*" onChange={handleOcrImage} className="sr-only" />
+              <input ref={ocrCameraInputRef} type="file" accept="image/*" capture="environment" onChange={handleOcrImage} className="sr-only" />
+              <div className="flex flex-wrap gap-2">
+                <button type="button" onClick={() => ocrInputRef.current?.click()} disabled={ocrLoading} className="rounded-xl border border-green-200 bg-white px-5 py-3 font-bold text-green-700 transition hover:bg-green-50 disabled:cursor-wait disabled:opacity-60 dark:border-green-800 dark:bg-slate-900 dark:text-green-300">
+                  {ocrLoading ? "កំពុងស្កេន…" : "ស្កេនវិក្កយបត្រ"}
+                </button>
+                <button type="button" onClick={() => ocrCameraInputRef.current?.click()} disabled={ocrLoading} className="rounded-xl border border-slate-200 bg-white px-5 py-3 font-bold text-slate-700 transition hover:bg-slate-50 disabled:cursor-wait disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800">
+                  ថតរូប
+                </button>
+              </div>
+              {ocrMessage && <p role="status" className="mt-2 text-sm font-semibold text-green-700 dark:text-green-400">{ocrMessage}</p>}
+              {ocrError && <p role="alert" className="mt-2 text-sm font-semibold text-red-600 dark:text-red-400">{ocrError}</p>}
+            </div>}
           </div>
 
           <div className="grid gap-6 lg:grid-cols-[1.4fr_0.8fr]">
@@ -458,6 +600,7 @@ export default function Sell() {
                   </label>
 
                   <input
+                    aria-label="ឈ្មោះអតិថិជន"
                     value={customerName}
                     onChange={(e) => {
                       const value = e.target.value;
@@ -524,6 +667,7 @@ export default function Sell() {
                   </label>
 
                   <input
+                    aria-label="លេខទូរស័ព្ទ"
                     value={customerPhone}
                     onChange={(e) => setCustomerPhone(e.target.value)}
                     disabled={customerName.trim() === WALK_IN_CUSTOMER}
@@ -536,70 +680,145 @@ export default function Sell() {
                   />
                 </div>
 
-                <div>
+                <div className="md:col-span-2 md:row-start-2">
                   <label className="mb-2 block text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
                     កាលបរិច្ឆេទលក់
                   </label>
-                  <input
-                    type="date"
+                  <DatePickerInput
+                    ariaLabel="កាលបរិច្ឆេទលក់"
                     value={saleDate}
                     onChange={(e) => setSaleDate(e.target.value || today())}
-                    className="w-full rounded-xl border border-slate-200 dark:border-slate-700 dark:bg-slate-950 dark:text-white px-4 py-3 outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100"
+                    className="w-full md:max-w-[calc(50%-0.625rem)]"
+                    controlClassName="px-4 py-3 dark:bg-slate-950"
                   />
                 </div>
 
-                <div className="md:col-span-2">
+                <div className="md:col-start-1 md:row-start-3">
                   <label className="mb-2 block text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
                     ប្រភេទដំឡូង
                   </label>
-                  <div className="flex flex-wrap gap-3">
-                    {TYPES.map((type) => (
-                      <button
-                        key={type}
-                        type="button"
-                        onClick={() => {
-                          setActiveType(type);
-                          setActiveGrade(1);
-                        }}
-                        className={`${optionButtonBase} ${activeType === type
-                            ? "border-green-600 bg-green-600 text-white hover:bg-green-700"
-                            : "border-slate-200 bg-white text-slate-700 hover:border-green-300 hover:bg-green-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:hover:border-green-700 dark:hover:bg-green-950/30"
+                  <div className="flex flex-wrap gap-2.5">
+                    {TYPES.map((type) => {
+                      const typeStatus = getTypeStockStatus(type);
+                      const isSelected = activeType === type;
+
+                      return (
+                        <button
+                          key={type}
+                          type="button"
+                          onClick={() => {
+                            setActiveType(type);
+                            setActiveGrade(1);
+                          }}
+                          className={`${optionButtonBase} relative ${
+                            isSelected
+                              ? "border-green-600 bg-green-600 text-white hover:bg-green-700"
+                              : "border-slate-200 bg-white text-slate-700 hover:border-green-300 hover:bg-green-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:hover:border-green-700 dark:hover:bg-green-950/30"
                           }`}
-                      >
-                        {TYPE_LABELS[type]}
-                      </button>
-                    ))}
+                        >
+                          <span>{TYPE_LABELS[type]}</span>
+
+                          {typeStatus.status === "out" && (
+                            <span className="absolute -top-2 -right-1.5 flex items-center justify-center rounded-full bg-red-500 px-2 py-0.5 text-[10px] font-bold leading-none text-white shadow-sm ring-2 ring-white dark:ring-slate-900">
+                              អស់
+                            </span>
+                          )}
+
+                          {typeStatus.status === "warning" && (
+                            <span
+                              className={`absolute -top-2 -right-1.5 flex items-center justify-center rounded-full px-2 py-0.5 text-[10px] font-bold leading-none text-white shadow-sm ring-2 ring-white dark:ring-slate-900 ${
+                                typeStatus.outCount > 0 ? "bg-red-500" : "bg-amber-500"
+                              }`}
+                            >
+                              {typeStatus.outCount > 0 ? "អស់ខ្លះ" : "តិច"}
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
 
-                <div>
+                <div className="md:col-start-1 md:row-start-4">
                   <label className="mb-2 block text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
                     លេខ
                   </label>
-                  <div className="flex flex-wrap gap-3">
-                    {GRADES.map((grade) => (
-                      <button
-                        key={grade}
-                        type="button"
-                        onClick={() => setActiveGrade(grade)}
-                        className={`${optionButtonBase} ${activeGrade === grade
-                            ? "border-green-600 bg-green-600 text-white hover:bg-green-700"
-                            : "border-slate-200 bg-white text-slate-700 hover:border-green-300 hover:bg-green-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:hover:border-green-700 dark:hover:bg-green-950/30"
+                  <div className="flex flex-wrap gap-2.5">
+                    {GRADES.map((grade) => {
+                      const gradeStatus = getGradeStockStatus(grade, activeType);
+                      const isSelected = activeGrade === grade;
+
+                      return (
+                        <button
+                          key={grade}
+                          type="button"
+                          onClick={() => setActiveGrade(grade)}
+                          className={`${optionButtonBase} relative ${
+                            isSelected
+                              ? "border-green-600 bg-green-600 text-white hover:bg-green-700"
+                              : "border-slate-200 bg-white text-slate-700 hover:border-green-300 hover:bg-green-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:hover:border-green-700 dark:hover:bg-green-950/30"
                           }`}
-                      >
-                        លេខ {grade}
-                      </button>
-                    ))}
+                        >
+                          <span>លេខ {grade}</span>
+
+                          {gradeStatus.status === "out" && (
+                            <span className="absolute -top-2 -right-1.5 flex items-center justify-center rounded-full bg-red-500 px-2 py-0.5 text-[10px] font-bold leading-none text-white shadow-sm ring-2 ring-white dark:ring-slate-900">
+                              អស់
+                            </span>
+                          )}
+
+                          {gradeStatus.status === "low" && (
+                            <span className="absolute -top-2 -right-1.5 flex items-center justify-center rounded-full bg-amber-500 px-2 py-0.5 text-[10px] font-bold leading-none text-white shadow-sm ring-2 ring-white dark:ring-slate-900">
+                              តិច
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
 
-                <div>
+                <div className="md:col-start-2 md:row-start-3">
                   <label className="mb-2 block text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
                     ស្តុកមាន
                   </label>
-                  <div className="rounded-xl border border-green-100 dark:border-green-800/60 bg-green-50 dark:bg-green-950/30 px-4 py-3 font-bold text-green-700 dark:text-green-400">
-                    {formatKg(stockKg)}
+                  <div
+                    className={`flex items-center justify-between rounded-xl border px-4 py-3 font-bold transition-colors ${
+                      stockKg <= 0
+                        ? "border-red-200 bg-red-50 text-red-700 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-400"
+                        : stockKg <= LOW_STOCK_THRESHOLD
+                          ? "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-400"
+                          : "border-green-100 bg-green-50 text-green-700 dark:border-green-800/60 dark:bg-green-950/30 dark:text-green-400"
+                    }`}
+                  >
+                    <span>{formatKg(stockKg)}</span>
+                    {stockKg <= 0 ? (
+                      <span className="rounded-md bg-red-600 px-2 py-0.5 text-xs text-white">
+                        អស់ស្តុក
+                      </span>
+                    ) : stockKg <= LOW_STOCK_THRESHOLD ? (
+                      <span className="rounded-md bg-amber-500 px-2 py-0.5 text-xs text-white">
+                        ស្តុកនៅសល់តិច
+                      </span>
+                    ) : null}
                   </div>
+                </div>
+
+                <div className="flex flex-col items-center md:col-start-2 md:row-start-4">
+                  <label className="mb-2 hidden text-xs font-bold uppercase select-none md:block md:invisible">
+                    បន្ថែមស្តុក
+                  </label>
+                  <button
+                    type="button"
+                    onClick={goToStockPage}
+                    className={`${optionButtonBase} flex w-full max-w-[280px] items-center justify-center gap-2 border-emerald-500/40 bg-emerald-50 text-emerald-700 hover:border-emerald-500 hover:bg-emerald-100 hover:shadow-md active:scale-[0.98] dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300 dark:hover:bg-emerald-900/60`}
+                    title={`បន្ថែមស្តុកសម្រាប់ ${productKhmer(selectedProduct || { type: activeType, grade: activeGrade })}`}
+                  >
+                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-600 text-white text-xs font-black">
+                      +
+                    </span>
+                    <span>ស្តុក</span>
+                  </button>
                 </div>
 
                 <div>
@@ -608,6 +827,7 @@ export default function Sell() {
                   </label>
                   <div className="relative">
                     <input
+                      aria-label="បរិមាណ"
                       type="text"
                       inputMode="decimal"
                       value={quantity}
@@ -671,6 +891,7 @@ export default function Sell() {
                   </label>
                   <div className="relative">
                     <input
+                      aria-label="តម្លៃក្នុងមួយគីឡូ"
                       type="text"
                       inputMode="numeric"
                       value={pricePerKg}
@@ -897,31 +1118,56 @@ export default function Sell() {
 
                   {cartItems.map((item, index) => (
                     <div
-                      key={`${item.product_id}-${index}`}
+                      key={item.client_id || `${item.product_id}-${index}`}
                       className="mb-3 rounded-xl border border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 p-3 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
                     >
                       <div className="flex justify-between gap-3">
-                        <div>
+                        <div className="min-w-0">
                           <p className="font-bold dark:text-white">
                             {productKhmer(item.product)}
                             {item.customBoxValue ? ` ${item.customBoxValue}x3%` : ""}
                           </p>
+                          {item.source === "ocr" && item.quantity_parts?.length > 0 && (
+                            <p className="mt-1 break-words text-xs text-slate-500 dark:text-slate-400">
+                              {item.quantity_parts.filter((part) => part !== "").join(" + ")} = {formatKg(item.quantity_kg)}
+                            </p>
+                          )}
                           <p className="text-xs text-slate-500 dark:text-slate-400">
                             {formatKg(item.quantity_kg)} ×{" "}
-                            {formatRiel(item.price_per_kg)}
+                            {item.price_per_kg === "" ? "មិនទាន់កំណត់តម្លៃ" : formatRiel(item.price_per_kg)}
                           </p>
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => removeItem(index)}
-                          className="rounded-lg px-2 text-base font-black text-red-600 transition hover:bg-red-50 hover:text-red-700 active:scale-95 dark:hover:bg-red-950/30"
-                        >
-                          លុប
-                        </button>
+                        <div className="flex shrink-0 items-start gap-1">
+                          <button
+                            type="button"
+                            onClick={() => setEditingCartItem((current) => current === item.client_id ? null : item.client_id)}
+                            className="min-h-10 rounded-lg px-2 font-bold text-green-700 transition hover:bg-green-50 active:scale-95 dark:text-green-400 dark:hover:bg-green-950/30"
+                          >
+                            កែ
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              removeItem(index);
+                              if (editingCartItem === item.client_id) setEditingCartItem(null);
+                            }}
+                            className="min-h-10 rounded-lg px-2 font-black text-red-600 transition hover:bg-red-50 hover:text-red-700 active:scale-95 dark:hover:bg-red-950/30"
+                          >
+                            លុប
+                          </button>
+                        </div>
                       </div>
                       <div className="mt-2 text-right font-bold dark:text-white">
                         {formatRiel(item.subtotal)}
                       </div>
+                      {editingCartItem === item.client_id && (
+                        <CartItemEditor
+                          item={item}
+                          products={products}
+                          onChange={(update) => updateCartItem(item.client_id, update)}
+                          onDone={() => setEditingCartItem(null)}
+                        />
+                      )}
                     </div>
                   ))}
 
@@ -1069,6 +1315,112 @@ export default function Sell() {
 
       {invoice && <PrintInvoice invoice={invoice} />}
     </>
+  );
+}
+
+function CartItemEditor({ item, products, onChange, onDone }) {
+  const fieldClass = "w-full min-w-0 rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-base outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100 dark:border-slate-600 dark:bg-slate-950 dark:text-white";
+  const availableTypes = TYPES.filter((type) => (
+    products.some((product) => String(product.type) === type)
+  ));
+
+  function changeProduct(type) {
+    onChange((current) => {
+      const product = products.find((candidate) => (
+        String(candidate.type) === type
+        && Number(candidate.grade) === Number(current.product?.grade)
+      ));
+
+      return product ? recalculateCartItem(current, {
+        product_id: product.id,
+        product,
+      }) : current;
+    });
+  }
+
+  function changeGrade(grade) {
+    onChange((current) => {
+      const product = productForGrade(current, grade, products);
+      return product ? recalculateCartItem(current, {
+        product_id: product.id,
+        product,
+      }) : current;
+    });
+  }
+
+  function changePart(partIndex, value) {
+    onChange((current) => updateQuantityParts(
+      current,
+      current.quantity_parts.map((part, index) => index === partIndex ? value : part)
+    ));
+  }
+
+  return (
+    <div className="mt-3 rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-600 dark:bg-slate-900">
+      <div className="grid gap-3 sm:grid-cols-[2fr_1fr]">
+        <label className="text-xs font-bold text-slate-600 dark:text-slate-300">
+          ទំនិញ
+          <select value={item.product?.type || ""} onChange={(event) => changeProduct(event.target.value)} className={`${fieldClass} mt-1`}>
+            {availableTypes.map((type) => (
+              <option key={type} value={type}>{TYPE_LABELS[type]}</option>
+            ))}
+          </select>
+        </label>
+
+        <label className="text-xs font-bold text-slate-600 dark:text-slate-300">
+          លេខ
+          <select value={item.product?.grade || ""} onChange={(event) => changeGrade(event.target.value)} className={`${fieldClass} mt-1`}>
+            {GRADES.map((grade) => <option key={grade} value={grade}>លេខ {grade}</option>)}
+          </select>
+        </label>
+      </div>
+
+      {item.source === "ocr" ? (
+        <fieldset className="mt-3">
+          <legend className="text-xs font-bold text-slate-600 dark:text-slate-300">បរិមាណ</legend>
+          <div className="mt-1 flex flex-wrap items-center gap-2">
+            {item.quantity_parts.map((part, partIndex) => (
+              <div key={partIndex} className="flex items-center gap-1">
+                {partIndex > 0 && <span aria-hidden="true">+</span>}
+                <input
+                  value={part}
+                  onChange={(event) => changePart(partIndex, parseDecimalInput(event.target.value))}
+                  inputMode="decimal"
+                  aria-label={`បរិមាណទី ${partIndex + 1}`}
+                  className={`${fieldClass} !w-20`}
+                />
+                <button type="button" aria-label={`លុបបរិមាណទី ${partIndex + 1}`} onClick={() => onChange((current) => updateQuantityParts(current, current.quantity_parts.filter((_, index) => index !== partIndex)))} className="min-h-10 min-w-10 rounded-lg text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30">×</button>
+              </div>
+            ))}
+            <button type="button" onClick={() => onChange((current) => updateQuantityParts(current, [...current.quantity_parts, ""]))} className="min-h-10 rounded-lg border border-slate-200 px-3 py-2 text-sm font-bold hover:bg-slate-50 dark:border-slate-600 dark:hover:bg-slate-800">+ បន្ថែម</button>
+          </div>
+          <p className="mt-2 text-xs font-bold">សរុប {formatKg(item.quantity_kg)}</p>
+        </fieldset>
+      ) : (
+        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          <label className="text-xs font-bold text-slate-600 dark:text-slate-300">
+            បរិមាណ
+            <input value={item.quantity} onChange={(event) => onChange((current) => recalculateCartItem(current, { quantity: parseDecimalInput(event.target.value) }))} inputMode="decimal" className={`${fieldClass} mt-1`} />
+          </label>
+          <label className="text-xs font-bold text-slate-600 dark:text-slate-300">
+            ឯកតា
+            <select value={item.unit} onChange={(event) => onChange((current) => recalculateCartItem(current, { unit: event.target.value }))} className={`${fieldClass} mt-1`}>
+              <option value="kg">គីឡូ</option>
+              <option value="ton">តោន</option>
+            </select>
+          </label>
+        </div>
+      )}
+
+      <label className="mt-3 block text-xs font-bold text-slate-600 dark:text-slate-300">
+        តម្លៃក្នុងមួយគីឡូ
+        <input value={item.price_per_kg} onChange={(event) => onChange((current) => recalculateCartItem(current, { price_per_kg: parseDecimalInput(event.target.value) }))} inputMode="decimal" placeholder="0" className={`${fieldClass} mt-1`} />
+      </label>
+
+      <div className="mt-3 flex justify-end">
+        <button type="button" onClick={onDone} className="min-h-10 rounded-lg bg-green-600 px-4 py-2 text-sm font-bold text-white hover:bg-green-700">រួចរាល់</button>
+      </div>
+    </div>
   );
 }
 
