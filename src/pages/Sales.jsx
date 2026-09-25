@@ -3,6 +3,7 @@ import html2canvas from "html2canvas";
 import api from "../api";
 import PrintInvoice from "../components/PrintInvoice";
 import DatePickerInput from "../components/DatePickerInput";
+import useSalesHistory from "../hooks/useSalesHistory";
 
 
 const INITIAL_FILTERS = {
@@ -20,8 +21,7 @@ const INITIAL_PAYMENT_FORM = {
   note: "",
 };
 
-const VISIBLE_STEP = 5;
-const INITIAL_VISIBLE_COUNT = 10;
+const VISIBLE_STEP = 20;
 const MAX_SELECTED_INVOICES = 10;
 
 function formatRiel(value) {
@@ -143,15 +143,6 @@ function formatMoneyInput(value) {
   return Number(raw).toLocaleString();
 }
 
-function isMergedInvoice(sale) {
-  return (
-    sale?.invoice_no?.startsWith("MERGE-") ||
-    sale?.invoice_no?.startsWith("MG-") ||
-    sale?.merged_from ||
-    sale?.note?.toLowerCase?.().includes("merged from")
-  );
-}
-
 function getSaleMatchedItems(sale, selectedProductId) {
   const items = sale.items || [];
 
@@ -233,11 +224,21 @@ export default function Sales() {
   const tableRef = useRef(null);
   const imageInvoiceRef = useRef(null);
 
-  const [sales, setSales] = useState([]);
+  const [filters, setFilters] = useState(INITIAL_FILTERS);
+  const {
+    sales,
+    setSales,
+    refreshSales: fetchSales,
+    seeMore,
+    hasMore,
+    total,
+    loadingSales,
+    loadingMore,
+    salesError,
+    searchPending,
+  } = useSalesHistory(filters);
   const [hasAutoScrolled, setHasAutoScrolled] = useState(false);
   const [products, setProducts] = useState([]);
-  const [filters, setFilters] = useState(INITIAL_FILTERS);
-  const [visibleCount, setVisibleCount] = useState(INITIAL_VISIBLE_COUNT);
   const [selectedSaleIds, setSelectedSaleIds] = useState([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
@@ -285,7 +286,6 @@ export default function Sales() {
   }, []);
 
   useEffect(() => {
-    fetchSales();
     fetchProducts();
   }, []);
 
@@ -312,16 +312,6 @@ export default function Sales() {
     }
   }, [showDeleted]);
 
-  useEffect(() => {
-    setVisibleCount(INITIAL_VISIBLE_COUNT);
-    setSelectedSaleIds([]);
-  }, [filters]);
-
-  async function fetchSales() {
-    const res = await api.get("/sales");
-    setSales(Array.isArray(res.data) ? res.data : res.data.data || []);
-  }
-
   async function fetchProducts() {
     const res = await api.get("/products");
     setProducts(Array.isArray(res.data) ? res.data : res.data.data || []);
@@ -343,14 +333,8 @@ export default function Sales() {
   async function restoreDeletedSale(id) {
     setRestoringId(id);
     try {
-      const res = await api.post(`/sales/${id}/restore`);
-      // Add restored sale back to active list
-      const restored = res.data?.sale || res.data;
-      if (restored?.id) {
-        setSales((prev) => [restored, ...prev]);
-      } else {
-        await fetchSales();
-      }
+      await api.post(`/sales/${id}/restore`);
+      await fetchSales();
       setDeletedSales((prev) => prev.filter((s) => s.id !== id));
     } catch (err) {
       console.error("restoreDeletedSale error:", err);
@@ -432,9 +416,7 @@ export default function Sales() {
 
     try {
       await api.delete(`/sales/${deleteSale.id}`);
-
-      setSales((prev) => prev.filter((s) => s.id !== deleteSale.id));
-
+      await fetchSales();
       setDeleteSale(null);
     } catch (err) {
       console.error(err);
@@ -445,11 +427,11 @@ export default function Sales() {
   }
   function updateFilter(key, value) {
     setFilters((prev) => ({ ...prev, [key]: value }));
+    setSelectedSaleIds([]);
   }
 
   function clearFilters() {
     setFilters(INITIAL_FILTERS);
-    setVisibleCount(INITIAL_VISIBLE_COUNT);
     setSelectedSaleIds([]);
   }
 
@@ -570,6 +552,7 @@ export default function Sales() {
 
       const res = await api.put(`/sales/${editSale.id}`, payload);
       updateSaleInState(res.data);
+      await fetchSales();
       setEditSale(null);
     } catch (error) {
       alert("កែប្រែវិក្កយបត្រមិនបានទេ។ សូមពិនិត្យ backend route PUT /sales/{id}");
@@ -624,9 +607,8 @@ export default function Sales() {
 
       if (res.data?.id) {
         updateSaleInState(res.data);
-      } else {
-        await fetchSales();
       }
+      await fetchSales();
 
       setAddPaymentSale(null);
       setAddPaymentForm(INITIAL_PAYMENT_FORM);
@@ -639,56 +621,10 @@ export default function Sales() {
     }
   }
 
-  const filteredSales = useMemo(() => {
-    return sales.filter((sale) => {
-      const keyword = filters.search.toLowerCase();
-
-      const matchesSearch =
-        !keyword ||
-        sale.invoice_no?.toLowerCase().includes(keyword) ||
-        sale.customer?.name?.toLowerCase().includes(keyword) ||
-        sale.customer?.phone?.toLowerCase().includes(keyword);
-
-      const matchesProduct =
-        filters.selectedProductId === "all" ||
-        (sale.items || []).some(
-          (item) => String(item.product_id) === String(filters.selectedProductId)
-        );
-
-      const matchesPaymentStatus =
-        filters.paymentStatus === "all" ||
-        normalizePaymentStatus(sale) === filters.paymentStatus;
-
-      const merged = isMergedInvoice(sale);
-
-      const matchesInvoiceType =
-        filters.invoiceType === "all" ||
-        (filters.invoiceType === "normal" && !merged) ||
-        (filters.invoiceType === "merged" && merged);
-
-      const saleDate = sale.created_at ? new Date(sale.created_at) : null;
-
-      const matchesDateFrom =
-        !filters.dateFrom ||
-        (saleDate && saleDate >= new Date(`${filters.dateFrom}T00:00:00`));
-
-      const matchesDateTo =
-        !filters.dateTo ||
-        (saleDate && saleDate <= new Date(`${filters.dateTo}T23:59:59`));
-
-      return (
-        matchesSearch &&
-        matchesProduct &&
-        matchesPaymentStatus &&
-        matchesInvoiceType &&
-        matchesDateFrom &&
-        matchesDateTo
-      );
-    });
-  }, [sales, filters]);
-
-  const visibleSales = filteredSales.slice(0, visibleCount);
-  const hasMore = visibleCount < filteredSales.length;
+  const visibleSales = searchPending ? [] : sales;
+  const emptyLabel = loadingSales || searchPending
+    ? "កំពុងទាញទិន្នន័យ..."
+    : salesError ? "មិនអាចទាញទិន្នន័យបានទេ" : "មិនមានទិន្នន័យ";
 
   const selectedSales = useMemo(() => {
     return sales.filter((sale) => selectedSaleIds.includes(sale.id));
@@ -1148,10 +1084,10 @@ export default function Sales() {
                       );
                     })}
 
-                    {filteredSales.length === 0 && (
+                    {visibleSales.length === 0 && (
                       <tr>
                         <td colSpan="14" style={styles.empty}>
-                          មិនមានទិន្នន័យ
+                          {emptyLabel}
                         </td>
                       </tr>
                     )}
@@ -1185,24 +1121,25 @@ export default function Sales() {
               );
             })}
 
-            {filteredSales.length === 0 && (
-              <div style={styles.mobileEmpty}>មិនមានទិន្នន័យ</div>
+            {visibleSales.length === 0 && (
+              <div style={styles.mobileEmpty}>{emptyLabel}</div>
             )}
           </div>
 
-          {filteredSales.length > 0 && (
+          {visibleSales.length > 0 && (
             <div style={styles.moreWrap}>
               <p style={styles.countText}>
-                បង្ហាញ {Math.min(visibleCount, filteredSales.length)} / {filteredSales.length}
+                បង្ហាញ {visibleSales.length} / {total}
               </p>
 
               {hasMore && (
                 <button
                   type="button"
-                  onClick={() => setVisibleCount((prev) => prev + VISIBLE_STEP)}
+                  onClick={seeMore}
+                  disabled={loadingMore}
                   style={styles.moreBtn}
                 >
-                  មើលបន្ថែម {VISIBLE_STEP}
+                  {loadingMore ? "កំពុងទាញ..." : `មើលបន្ថែម ${VISIBLE_STEP}`}
                 </button>
               )}
             </div>
