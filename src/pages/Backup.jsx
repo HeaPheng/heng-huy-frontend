@@ -222,6 +222,70 @@ const styles = `
     box-shadow: 0 0 0 3px rgba(79,142,255,0.12);
   }
 
+  /* ── Multi-select ── */
+  .bm-selection-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 12px;
+    padding: 10px 12px;
+    border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 10px;
+    background: #12141a;
+    flex-wrap: wrap;
+  }
+
+  .bm-select-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 9px;
+    color: #aab0c0;
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    cursor: pointer;
+    user-select: none;
+  }
+
+  .bm-checkbox {
+    width: 18px;
+    height: 18px;
+    flex: 0 0 18px;
+    accent-color: #4f8eff;
+    cursor: pointer;
+  }
+
+  .bm-selection-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: auto;
+  }
+
+  .bm-selection-count {
+    color: #4f8eff;
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    white-space: nowrap;
+  }
+
+  .bm-btn-selection {
+    min-height: 34px;
+    border-radius: 8px;
+    padding: 6px 11px;
+    border: 1px solid rgba(255,255,255,0.1);
+    background: transparent;
+    color: #aab0c0;
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    font-weight: 500;
+    cursor: pointer;
+  }
+  .bm-btn-selection:hover { background: rgba(255,255,255,0.05); color: #e8eaf0; }
+  .bm-btn-selection.danger { border-color: rgba(255,79,106,0.35); color: #ff4f6a; }
+  .bm-btn-selection.danger:hover { background: rgba(255,79,106,0.1); }
+  .bm-btn-selection:disabled { cursor: wait; opacity: 0.55; }
+
   /* ── List ── */
   .bm-list { display: flex; flex-direction: column; gap: 10px; }
 
@@ -237,6 +301,7 @@ const styles = `
     animation: bmSlideIn 0.25s ease both;
   }
   .bm-card:hover { border-color: rgba(255,255,255,0.13); background: #1a1d26; }
+  .bm-card.selected { border-color: rgba(79,142,255,0.55); background: rgba(79,142,255,0.09); }
 
   @keyframes bmSlideIn {
     from { opacity: 0; transform: translateY(8px); }
@@ -424,6 +489,8 @@ const styles = `
     .bm-card-name { max-width: 120px; }
     .bm-ready-badge { display: none; }
     .bm-stats-row { grid-template-columns: repeat(3, 1fr); }
+    .bm-selection-actions { width: 100%; margin-left: 27px; }
+    .bm-btn-selection.danger { flex: 1; }
     .bm-toast { font-size: 11px; padding: 10px 14px; white-space: normal; max-width: 90vw; text-align: center; }
   }
 `;
@@ -460,24 +527,37 @@ export default function Backup() {
   const [search,  setSearch]  = useState("");
   const [filter,  setFilter]  = useState("all");
   const [toast,   setToast]   = useState(null); // { type: "success"|"error", msg: string }
+  const [selectedNames, setSelectedNames] = useState([]);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
 
   const showToast = (type, msg) => {
     setToast({ type, msg });
     setTimeout(() => setToast(null), 3500);
   };
 
-  const token = localStorage.getItem("pos_token");
-
   const loadBackups = async () => {
     try {
       const { data } = await api.get("/backups");
       setBackups(data);
+      setSelectedNames((current) => current.filter((name) => data.some((backup) => backup.name === name)));
     } catch (e) {
       console.error("Failed to load backups:", e);
     }
   };
 
-  useEffect(() => { loadBackups(); }, []);
+  useEffect(() => {
+    let active = true;
+
+    api.get("/backups")
+      .then(({ data }) => {
+        if (!active) return;
+        setBackups(data);
+        setSelectedNames((current) => current.filter((name) => data.some((backup) => backup.name === name)));
+      })
+      .catch((error) => console.error("Failed to load backups:", error));
+
+    return () => { active = false; };
+  }, []);
 
   const createBackup = async () => {
     await api.post("/backup/create");
@@ -495,6 +575,7 @@ export default function Backup() {
   const deleteBackup = async (name) => {
     if (prompt("Type DELETE to remove this backup") !== "DELETE") return;
     await api.delete("/backup/delete", { data: { file_name: name } });
+    setSelectedNames((current) => current.filter((selectedName) => selectedName !== name));
     showToast("success", "Backup deleted");
     loadBackups();
   };
@@ -534,6 +615,52 @@ export default function Backup() {
   const filtered = backups
     .filter((b) => b.name.toLowerCase().includes(search.toLowerCase()))
     .filter((b) => filter === "all" || getBackupType(b.name) === filter);
+
+  const filteredNames = filtered.map((backup) => backup.name);
+  const allFilteredSelected = filteredNames.length > 0
+    && filteredNames.every((name) => selectedNames.includes(name));
+
+  const toggleBackup = (name) => {
+    setSelectedNames((current) => current.includes(name)
+      ? current.filter((selectedName) => selectedName !== name)
+      : [...current, name]);
+  };
+
+  const toggleAllFiltered = () => {
+    setSelectedNames((current) => {
+      if (allFilteredSelected) {
+        return current.filter((name) => !filteredNames.includes(name));
+      }
+
+      return [...new Set([...current, ...filteredNames])];
+    });
+  };
+
+  const deleteSelectedBackups = async () => {
+    if (selectedNames.length === 0 || bulkDeleting) return;
+    if (prompt(`Type DELETE to remove ${selectedNames.length} selected backups`) !== "DELETE") return;
+
+    setBulkDeleting(true);
+    const namesToDelete = [...selectedNames];
+
+    try {
+      const results = await Promise.allSettled(namesToDelete.map((name) => (
+        api.delete("/backup/delete", { data: { file_name: name } })
+      )));
+      const failedNames = namesToDelete.filter((_, index) => results[index].status === "rejected");
+
+      await loadBackups();
+      setSelectedNames(failedNames);
+
+      if (failedNames.length > 0) {
+        showToast("error", `${namesToDelete.length - failedNames.length} deleted, ${failedNames.length} failed`);
+      } else {
+        showToast("success", `${namesToDelete.length} backups deleted`);
+      }
+    } finally {
+      setBulkDeleting(false);
+    }
+  };
 
   return (
     <div className="bm-scope">
@@ -618,6 +745,45 @@ export default function Backup() {
             />
           </div>
 
+          {/* ── Multi-select controls ── */}
+          {(filtered.length > 0 || selectedNames.length > 0) && (
+            <div className="bm-selection-bar">
+              <label className="bm-select-label">
+                <input
+                  type="checkbox"
+                  className="bm-checkbox"
+                  checked={allFilteredSelected}
+                  onChange={toggleAllFiltered}
+                  disabled={filtered.length === 0}
+                  aria-label="Select all visible backups"
+                />
+                Select all visible
+              </label>
+
+              {selectedNames.length > 0 && (
+                <div className="bm-selection-actions">
+                  <span className="bm-selection-count">{selectedNames.length} selected</span>
+                  <button
+                    type="button"
+                    className="bm-btn-selection"
+                    onClick={() => setSelectedNames([])}
+                    disabled={bulkDeleting}
+                  >
+                    Clear
+                  </button>
+                  <button
+                    type="button"
+                    className="bm-btn-selection danger"
+                    onClick={deleteSelectedBackups}
+                    disabled={bulkDeleting}
+                  >
+                    {bulkDeleting ? "Deleting..." : "Delete selected"}
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* ── Backup list ── */}
           <div className="bm-list">
             {filtered.length === 0 ? (
@@ -629,8 +795,17 @@ export default function Backup() {
               filtered.map((b, i) => {
                 const type      = getBackupType(b.name);
                 const iconColor = type === "auto" ? "#4f8eff" : type === "pre-restore" ? "#ffb432" : "#b482ff";
+                const isSelected = selectedNames.includes(b.name);
                 return (
-                  <div key={b.name} className="bm-card" style={{ animationDelay: `${i * 40}ms` }}>
+                  <div key={b.name} className={`bm-card ${isSelected ? "selected" : ""}`} style={{ animationDelay: `${i * 40}ms` }}>
+
+                    <input
+                      type="checkbox"
+                      className="bm-checkbox"
+                      checked={isSelected}
+                      onChange={() => toggleBackup(b.name)}
+                      aria-label={`Select ${b.name}`}
+                    />
 
                     <div className="bm-card-icon">
                       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={iconColor} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
